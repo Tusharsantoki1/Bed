@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Iterable
+
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -57,3 +59,34 @@ def delete_item(db: Session, company_id: int, item_id: int) -> None:
     item = get_item(db, company_id, item_id)
     db.delete(item)
     db.commit()
+
+
+def remember_items(db: Session, company_id: int, line_items: Iterable) -> None:
+    """Auto-save any new product names typed on a bill into the company's
+    catalog, so next time they can just be picked. Names already in the catalog
+    (case-insensitive) are left untouched. The caller is responsible for the
+    commit (this runs inside the invoice-creation transaction).
+
+    ``line_items`` is any iterable of objects with ``product_name``, ``rate``
+    and ``gst_rate`` (e.g. ``InvoiceItemCreate``)."""
+    existing = {
+        (name or "").strip().lower()
+        for name in db.execute(
+            select(Item.name).where(Item.company_id == company_id)
+        ).scalars()
+    }
+    seen: set[str] = set()
+    for li in line_items:
+        name = (getattr(li, "product_name", "") or "").strip()
+        key = name.lower()
+        if not name or key in existing or key in seen:
+            continue
+        seen.add(key)
+        db.add(
+            Item(
+                company_id=company_id,
+                name=name,
+                default_rate=getattr(li, "rate", 0) or 0,
+                default_gst_rate=getattr(li, "gst_rate", 0) or 0,
+            )
+        )

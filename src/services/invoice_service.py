@@ -21,7 +21,7 @@ from ..schemas.invoice import (
     PaymentUpdate,
 )
 from ..utils.numbers import amount_in_words, money
-from . import party_service
+from . import item_service, party_service
 
 
 # --- Helpers ---------------------------------------------------------------
@@ -201,6 +201,9 @@ def create_invoice(db: Session, company: Company, data: InvoiceCreate, created_b
         items=rows,
     )
     db.add(invoice)
+    # Remember any new product names in the company's item catalog so they can
+    # be picked next time instead of re-typed.
+    item_service.remember_items(db, company.id, data.items)
     db.commit()
     return get_invoice(db, company.id, invoice.id)
 
