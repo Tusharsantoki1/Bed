@@ -11,7 +11,12 @@ from ..models.company import Company
 from ..models.user import User
 from ..schemas.auth import CompanyRegisterRequest
 from ..schemas.common import Message
-from ..schemas.company import CompanyOut, CompanySummary
+from ..schemas.company import (
+    CompanyOut,
+    CompanySummary,
+    PasswordReset,
+    SuperAdminCompanyUpdate,
+)
 from ..schemas.dashboard import SuperAdminDashboard
 from ..schemas.plan import PlanCreate, PlanOut, PlanUpdate
 from ..schemas.subscription import SubscriptionCreate, SubscriptionOut
@@ -80,6 +85,24 @@ def create_company(payload: CompanyRegisterRequest, db: Session = Depends(get_db
 @router.get("/companies/{company_id}", response_model=CompanyOut)
 def get_company(company_id: int, db: Session = Depends(get_db)):
     return company_service.get_company(db, company_id)
+
+
+@router.patch("/companies/{company_id}", response_model=CompanyOut)
+def update_company(
+    company_id: int, payload: SuperAdminCompanyUpdate, db: Session = Depends(get_db)
+):
+    """Change a company's locked identity: name, invoice prefix and numbering."""
+    company = company_service.get_company(db, company_id)
+    return company_service.admin_update_company(db, company, payload)
+
+
+@router.patch("/companies/{company_id}/password", response_model=Message)
+def reset_company_password(
+    company_id: int, payload: PasswordReset, db: Session = Depends(get_db)
+):
+    """Reset the login password of the company's admin user."""
+    company_service.reset_company_admin_password(db, company_id, payload.new_password)
+    return Message(detail="Company admin password has been reset")
 
 
 @router.patch("/companies/{company_id}/active", response_model=CompanySummary)

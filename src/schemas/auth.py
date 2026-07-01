@@ -2,8 +2,9 @@
 
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from .common import validate_pincode
 from .user import UserOut
 
 
@@ -21,6 +22,7 @@ class CompanyRegisterRequest(BaseModel):
     city: Optional[str] = Field(default=None, max_length=100)
     state: Optional[str] = Field(default=None, max_length=100)
     state_code: Optional[str] = Field(default=None, max_length=5)
+    pincode: Optional[str] = Field(default=None, max_length=10)
     phone: Optional[str] = Field(default=None, max_length=20)
     gstin: Optional[str] = Field(default=None, max_length=20)
 
@@ -28,6 +30,11 @@ class CompanyRegisterRequest(BaseModel):
     admin_name: str = Field(min_length=1, max_length=150)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("pincode")
+    @classmethod
+    def _check_pincode(cls, v: Optional[str]) -> Optional[str]:
+        return validate_pincode(v)
 
 
 class Token(BaseModel):

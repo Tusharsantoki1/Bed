@@ -13,6 +13,7 @@ from ..models.enums import UserRole
 from ..models.user import User
 from ..schemas.auth import CompanyRegisterRequest
 from ..utils.security import hash_password, verify_password
+from .company_service import default_invoice_prefix
 
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
@@ -35,9 +36,10 @@ def register_company(db: Session, data: CompanyRegisterRequest) -> User:
         city=data.city,
         state=data.state,
         state_code=data.state_code,
+        pincode=data.pincode,
         phone=data.phone,
         gstin=data.gstin,
-        invoice_prefix="INV/",
+        invoice_prefix=default_invoice_prefix(data.company_name),
         next_invoice_number=1,
     )
     db.add(company)

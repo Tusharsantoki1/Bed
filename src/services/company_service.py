@@ -11,9 +11,24 @@ from sqlalchemy.orm import Session
 from ..models.company import Company
 from ..models.enums import UserRole
 from ..models.user import User
-from ..schemas.company import CompanyBrandingUpdate, CompanyUpdate
+from ..schemas.company import (
+    CompanyBrandingUpdate,
+    CompanyUpdate,
+    SuperAdminCompanyUpdate,
+)
 from ..schemas.user import StaffCreate
 from ..utils.security import hash_password
+
+
+def default_invoice_prefix(name: str) -> str:
+    """Derive the default invoice prefix from the company name: the first two
+    alphanumeric characters, upper-cased, followed by '/'.
+
+    e.g. "E&H Fincorp Associates" -> "EH/". Falls back to "INV/" when the name
+    has no usable characters.
+    """
+    code = "".join(ch for ch in name if ch.isalnum())[:2].upper()
+    return f"{code}/" if code else "INV/"
 
 
 def get_company(db: Session, company_id: int) -> Company:
@@ -24,11 +39,43 @@ def get_company(db: Session, company_id: int) -> Company:
 
 
 def update_company(db: Session, company: Company, data: CompanyUpdate) -> Company:
+    """Company-admin self-service update (identity fields excluded by schema)."""
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(company, field, value)
     db.commit()
     db.refresh(company)
     return company
+
+
+def admin_update_company(
+    db: Session, company: Company, data: SuperAdminCompanyUpdate
+) -> Company:
+    """Super-admin-only update of the company's locked identity fields
+    (name, invoice prefix and invoice numbering)."""
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(company, field, value)
+    db.commit()
+    db.refresh(company)
+    return company
+
+
+def reset_company_admin_password(db: Session, company_id: int, new_password: str) -> User:
+    """Super admin sets a new login password for the company's admin user."""
+    get_company(db, company_id)  # 404 if the company doesn't exist
+    admin = db.execute(
+        select(User)
+        .where(User.company_id == company_id, User.role == UserRole.company_admin)
+        .order_by(User.id)
+    ).scalars().first()
+    if admin is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This company has no admin account",
+        )
+    admin.password_hash = hash_password(new_password)
+    db.commit()
+    db.refresh(admin)
+    return admin
 
 
 def update_branding(db: Session, company: Company, data: CompanyBrandingUpdate) -> Company:

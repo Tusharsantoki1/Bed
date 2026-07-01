@@ -2,15 +2,19 @@
 
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from .common import ORMModel
+from .common import ORMModel, validate_pincode
 
 
 class CompanyUpdate(BaseModel):
-    """Partial update of the company profile. All fields optional."""
+    """Partial update of the company profile by the company admin.
 
-    name: Optional[str] = Field(default=None, max_length=200)
+    The company *name*, *invoice prefix* and *invoice numbering* are
+    deliberately absent: they are locked to the company's identity and can
+    only be changed by a super admin (see ``SuperAdminCompanyUpdate``).
+    """
+
     address: Optional[str] = Field(default=None, max_length=500)
     city: Optional[str] = Field(default=None, max_length=100)
     state: Optional[str] = Field(default=None, max_length=100)
@@ -26,9 +30,26 @@ class CompanyUpdate(BaseModel):
     bank_ifsc: Optional[str] = Field(default=None, max_length=20)
     upi_number: Optional[str] = Field(default=None, max_length=50)
 
-    invoice_prefix: Optional[str] = Field(default=None, max_length=20)
-    next_invoice_number: Optional[int] = Field(default=None, ge=1)
     default_note: Optional[str] = Field(default=None, max_length=1000)
+
+    @field_validator("pincode")
+    @classmethod
+    def _check_pincode(cls, v: Optional[str]) -> Optional[str]:
+        return validate_pincode(v)
+
+
+class SuperAdminCompanyUpdate(BaseModel):
+    """Identity fields only a super admin may change."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    invoice_prefix: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    next_invoice_number: Optional[int] = Field(default=None, ge=1)
+
+
+class PasswordReset(BaseModel):
+    """Super admin sets a new login password for a company's admin user."""
+
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class CompanyBrandingUpdate(BaseModel):
