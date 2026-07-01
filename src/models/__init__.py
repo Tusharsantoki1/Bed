@@ -10,6 +10,7 @@ from .enums import (
     UserRole,
 )
 from .invoice import Invoice, InvoiceItem
+from .item import Item
 from .party import Party
 from .subscription import Plan, Subscription
 from .user import User
@@ -18,6 +19,7 @@ __all__ = [
     "Company",
     "User",
     "Party",
+    "Item",
     "Invoice",
     "InvoiceItem",
     "Plan",

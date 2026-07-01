@@ -59,6 +59,14 @@ def admin_update_company(
     return company
 
 
+def delete_company(db: Session, company_id: int) -> None:
+    """Super admin removes a company and everything under it (users, parties,
+    items, invoices, subscriptions cascade)."""
+    company = get_company(db, company_id)
+    db.delete(company)
+    db.commit()
+
+
 def reset_company_admin_password(db: Session, company_id: int, new_password: str) -> User:
     """Super admin sets a new login password for the company's admin user."""
     get_company(db, company_id)  # 404 if the company doesn't exist

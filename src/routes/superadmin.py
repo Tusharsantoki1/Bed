@@ -114,6 +114,20 @@ def set_company_active(company_id: int, is_active: bool, db: Session = Depends(g
     return company
 
 
+@router.get("/companies/{company_id}/users", response_model=list[UserOut])
+def list_company_users(company_id: int, db: Session = Depends(get_db)):
+    """List the admin + staff accounts belonging to a company."""
+    company_service.get_company(db, company_id)  # 404 if missing
+    return company_service.list_staff(db, company_id)
+
+
+@router.delete("/companies/{company_id}", response_model=Message)
+def delete_company(company_id: int, db: Session = Depends(get_db)):
+    """Delete a company and all of its data."""
+    company_service.delete_company(db, company_id)
+    return Message(detail="Company deleted")
+
+
 # --- Subscriptions ---
 
 @router.get("/companies/{company_id}/subscriptions", response_model=list[SubscriptionOut])

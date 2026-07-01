@@ -12,6 +12,7 @@ from .routes import (
     company,
     dashboard,
     invoices,
+    items,
     parties,
     superadmin,
 )
@@ -56,6 +57,7 @@ api = settings.API_PREFIX
 app.include_router(auth.router, prefix=api)
 app.include_router(company.router, prefix=api)
 app.include_router(parties.router, prefix=api)
+app.include_router(items.router, prefix=api)
 app.include_router(invoices.router, prefix=api)
 app.include_router(dashboard.router, prefix=api)
 app.include_router(superadmin.router, prefix=api)

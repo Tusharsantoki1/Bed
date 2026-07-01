@@ -12,6 +12,7 @@ from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
     from .invoice import Invoice
+    from .item import Item
     from .party import Party
     from .subscription import Subscription
     from .user import User
@@ -62,6 +63,9 @@ class Company(Base, TimestampMixin):
         back_populates="company", cascade="all, delete-orphan"
     )
     parties: Mapped[list["Party"]] = relationship(
+        back_populates="company", cascade="all, delete-orphan"
+    )
+    items: Mapped[list["Item"]] = relationship(
         back_populates="company", cascade="all, delete-orphan"
     )
     invoices: Mapped[list["Invoice"]] = relationship(
