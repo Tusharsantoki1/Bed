@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, Integer, String, Text
+from sqlalchemy import Boolean, Date, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 from .mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from .followup import Followup
     from .invoice import Invoice
     from .item import Item
     from .party import Party
+    from .payment import Payment
     from .subscription import Subscription
     from .user import User
 
@@ -56,6 +59,11 @@ class Company(Base, TimestampMixin):
 
     default_note: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
+    # Collection settings.
+    default_credit_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    financial_year_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    financial_year_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relationships
@@ -69,6 +77,12 @@ class Company(Base, TimestampMixin):
         back_populates="company", cascade="all, delete-orphan"
     )
     invoices: Mapped[list["Invoice"]] = relationship(
+        back_populates="company", cascade="all, delete-orphan"
+    )
+    payments: Mapped[list["Payment"]] = relationship(
+        back_populates="company", cascade="all, delete-orphan"
+    )
+    followups: Mapped[list["Followup"]] = relationship(
         back_populates="company", cascade="all, delete-orphan"
     )
     subscriptions: Mapped[list["Subscription"]] = relationship(

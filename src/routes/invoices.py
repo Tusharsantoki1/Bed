@@ -14,10 +14,15 @@ from ..schemas.invoice import (
     InvoiceOut,
     InvoiceSummary,
     InvoiceUpdate,
+    OutstandingCreate,
     PaymentUpdate,
 )
 from ..services import company_service, invoice_service, pdf_service
-from ..utils.deps import require_active_subscription, require_company_user
+from ..utils.deps import (
+    require_active_subscription,
+    require_company_editor,
+    require_company_user,
+)
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -66,14 +71,27 @@ def update_invoice(
     return invoice_service.update_invoice(db, company, invoice_id, payload)
 
 
+@router.post("/outstanding", response_model=InvoiceOut, status_code=status.HTTP_201_CREATED)
+def create_outstanding(
+    payload: OutstandingCreate,
+    current_user: User = Depends(require_company_editor),
+    db: Session = Depends(get_db),
+):
+    """Quick manual outstanding entry (a bill without GST line items)."""
+    company = company_service.get_company(db, current_user.company_id)
+    return invoice_service.create_outstanding(db, company, payload, current_user.id)
+
+
 @router.post("/{invoice_id}/payment", response_model=InvoiceOut)
 def record_payment(
     invoice_id: int,
     payload: PaymentUpdate,
-    current_user: User = Depends(require_company_user),
+    current_user: User = Depends(require_company_editor),
     db: Session = Depends(get_db),
 ):
-    return invoice_service.record_payment(db, current_user.company_id, invoice_id, payload)
+    return invoice_service.record_payment(
+        db, current_user.company_id, invoice_id, payload, current_user.id
+    )
 
 
 @router.delete("/{invoice_id}", response_model=Message)

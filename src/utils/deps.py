@@ -11,7 +11,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models.enums import SubscriptionStatus, UserRole
+from ..models.enums import (
+    COMPANY_EDITOR_ROLES,
+    COMPANY_ROLES,
+    SubscriptionStatus,
+    UserRole,
+)
 from ..models.subscription import Subscription
 from ..models.user import User
 from .security import decode_token
@@ -58,8 +63,8 @@ def require_super_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 def require_company_user(current_user: User = Depends(get_current_user)) -> User:
-    """Any user attached to a company (admin or staff)."""
-    if current_user.role not in (UserRole.company_admin, UserRole.company_staff):
+    """Any user attached to a company (admin, staff, collection exec or viewer)."""
+    if current_user.role not in COMPANY_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Company account required",
@@ -68,6 +73,16 @@ def require_company_user(current_user: User = Depends(get_current_user)) -> User
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No company associated with this account",
+        )
+    return current_user
+
+
+def require_company_editor(current_user: User = Depends(get_current_user)) -> User:
+    """A company user allowed to modify data — everyone except read-only viewers."""
+    if current_user.role not in COMPANY_EDITOR_ROLES or current_user.company_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You have read-only access; editing is not allowed",
         )
     return current_user
 

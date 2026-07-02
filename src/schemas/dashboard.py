@@ -12,6 +12,12 @@ class CompanyDashboard(BaseModel):
     partial_count: int
     pending_count: int
     total_parties: int
+    # Collection KPIs
+    total_overdue: float = 0
+    today_collection: float = 0
+    month_collection: float = 0
+    today_followups: int = 0
+    pending_followups: int = 0
 
 
 class SuperAdminDashboard(BaseModel):

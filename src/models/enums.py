@@ -7,6 +7,40 @@ class UserRole(str, enum.Enum):
     super_admin = "super_admin"
     company_admin = "company_admin"
     company_staff = "company_staff"
+    collection_executive = "collection_executive"  # can enter payments/follow-ups
+    viewer = "viewer"                               # read-only company access
+
+
+# Company-attached roles that may edit data (everyone except viewer).
+COMPANY_EDITOR_ROLES = (
+    UserRole.company_admin,
+    UserRole.company_staff,
+    UserRole.collection_executive,
+)
+
+# All company-attached roles (editors + read-only viewer).
+COMPANY_ROLES = COMPANY_EDITOR_ROLES + (UserRole.viewer,)
+
+
+class PaymentMode(str, enum.Enum):
+    cash = "cash"
+    bank_transfer = "bank_transfer"
+    upi = "upi"
+    cheque = "cheque"
+    card = "card"
+    other = "other"
+
+
+class FollowupType(str, enum.Enum):
+    call = "call"
+    whatsapp = "whatsapp"
+    visit = "visit"
+    other = "other"
+
+
+class FollowupStatus(str, enum.Enum):
+    pending = "pending"
+    done = "done"
 
 
 class PlanCycle(str, enum.Enum):

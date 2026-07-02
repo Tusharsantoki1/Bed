@@ -1,5 +1,6 @@
 """Company schemas (profile, branding, bank details)."""
 
+from datetime import date
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -31,6 +32,11 @@ class CompanyUpdate(BaseModel):
     upi_number: Optional[str] = Field(default=None, max_length=50)
 
     default_note: Optional[str] = Field(default=None, max_length=1000)
+
+    # Collection settings.
+    default_credit_days: Optional[int] = Field(default=None, ge=0, le=3650)
+    financial_year_start: Optional[date] = None
+    financial_year_end: Optional[date] = None
 
     @field_validator("pincode")
     @classmethod
@@ -96,3 +102,7 @@ class CompanyOut(CompanySummary):
     invoice_prefix: str
     next_invoice_number: int
     default_note: Optional[str] = None
+
+    default_credit_days: int = 0
+    financial_year_start: Optional[date] = None
+    financial_year_end: Optional[date] = None

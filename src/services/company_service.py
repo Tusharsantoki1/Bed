@@ -16,7 +16,7 @@ from ..schemas.company import (
     CompanyUpdate,
     SuperAdminCompanyUpdate,
 )
-from ..schemas.user import StaffCreate
+from ..schemas.user import StaffCreate, StaffUpdate
 from ..utils.security import hash_password
 
 
@@ -103,6 +103,23 @@ def list_staff(db: Session, company_id: int) -> list[User]:
     )
 
 
+# Roles a company admin may assign to a staff user (not admin/super admin).
+_ASSIGNABLE_STAFF_ROLES = (
+    UserRole.company_staff,
+    UserRole.collection_executive,
+    UserRole.viewer,
+)
+
+
+def _validate_staff_role(role: UserRole) -> UserRole:
+    if role not in _ASSIGNABLE_STAFF_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Role must be one of: staff, collection executive, viewer",
+        )
+    return role
+
+
 def add_staff(db: Session, company_id: int, data: StaffCreate) -> User:
     existing = db.execute(
         select(User).where(User.email == data.email.lower())
@@ -117,11 +134,30 @@ def add_staff(db: Session, company_id: int, data: StaffCreate) -> User:
         password_hash=hash_password(data.password),
         full_name=data.full_name,
         phone=data.phone,
-        role=UserRole.company_staff,
+        role=_validate_staff_role(data.role),
         company_id=company_id,
         is_active=True,
     )
     db.add(staff)
+    db.commit()
+    db.refresh(staff)
+    return staff
+
+
+def update_staff(db: Session, company_id: int, user_id: int, data: StaffUpdate) -> User:
+    staff = db.get(User, user_id)
+    if staff is None or staff.company_id != company_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff user not found")
+    if staff.role == UserRole.company_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The company admin account cannot be edited here",
+        )
+    fields = data.model_dump(exclude_unset=True)
+    if "role" in fields and fields["role"] is not None:
+        fields["role"] = _validate_staff_role(fields["role"])
+    for field, value in fields.items():
+        setattr(staff, field, value)
     db.commit()
     db.refresh(staff)
     return staff

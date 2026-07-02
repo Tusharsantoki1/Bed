@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Iterable, Optional
 
@@ -11,17 +11,44 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models.company import Company
-from ..models.enums import GstType, PaymentStatus
+from ..models.enums import GstType, PaymentMode, PaymentStatus
 from ..models.invoice import Invoice, InvoiceItem
 from ..models.party import Party
 from ..schemas.invoice import (
     InvoiceCreate,
     InvoiceItemCreate,
     InvoiceUpdate,
+    OutstandingCreate,
     PaymentUpdate,
 )
+from ..schemas.payment import PaymentCreate
 from ..utils.numbers import amount_in_words, money
-from . import item_service, party_service
+from . import item_service, party_service, payment_service
+
+
+def _due_date(company: Company, party: Party, invoice_date: date, explicit: Optional[date]) -> date:
+    """Explicit due date, else invoice_date + the party's (or company's) credit days."""
+    if explicit is not None:
+        return explicit
+    credit = party.credit_days or company.default_credit_days or 0
+    return invoice_date + timedelta(days=credit)
+
+
+def _coerce_mode(value: Optional[str]) -> PaymentMode:
+    """Map a free-text payment mode (e.g. 'UPI', 'Bank') to a PaymentMode."""
+    if not value:
+        return PaymentMode.cash
+    v = value.strip().lower().replace(" ", "_")
+    mapping = {
+        "cash": PaymentMode.cash,
+        "bank": PaymentMode.bank_transfer, "bank_transfer": PaymentMode.bank_transfer,
+        "neft": PaymentMode.bank_transfer, "rtgs": PaymentMode.bank_transfer,
+        "imps": PaymentMode.bank_transfer,
+        "upi": PaymentMode.upi, "gpay": PaymentMode.upi, "phonepe": PaymentMode.upi,
+        "cheque": PaymentMode.cheque, "check": PaymentMode.cheque,
+        "card": PaymentMode.card,
+    }
+    return mapping.get(v, PaymentMode.other)
 
 
 # --- Helpers ---------------------------------------------------------------
@@ -177,12 +204,14 @@ def create_invoice(db: Session, company: Company, data: InvoiceCreate, created_b
     else:
         invoice_number = _next_invoice_number(db, company)
 
+    invoice_date = data.invoice_date or date.today()
     invoice = Invoice(
         company_id=company.id,
         party_id=party.id,
         created_by_id=created_by_id,
         invoice_number=invoice_number,
-        invoice_date=data.invoice_date or date.today(),
+        invoice_date=invoice_date,
+        due_date=_due_date(company, party, invoice_date, data.due_date),
         document_type=data.document_type,
         copy_type=data.copy_type,
         place_of_supply=data.place_of_supply or party.place_of_supply,
@@ -259,20 +288,96 @@ def update_invoice(db: Session, company: Company, invoice_id: int, data: Invoice
     return get_invoice(db, company.id, invoice.id)
 
 
-def record_payment(db: Session, company_id: int, invoice_id: int, data: PaymentUpdate) -> Invoice:
+def record_payment(
+    db: Session, company_id: int, invoice_id: int, data: PaymentUpdate,
+    created_by_id: Optional[int] = None,
+) -> Invoice:
+    """Add a payment against a bill (goes through the payment ledger)."""
     invoice = get_invoice(db, company_id, invoice_id)
-    amount_paid = money(data.amount_paid)
-    if amount_paid > money(invoice.grand_total):
+    amount = money(data.amount_paid)
+    if amount <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Amount paid cannot exceed the grand total",
+            detail="Payment amount must be greater than zero",
         )
-    invoice.amount_paid = amount_paid
-    invoice.payment_status = _payment_status(amount_paid, money(invoice.grand_total))
-    invoice.payment_date = data.payment_date or (date.today() if amount_paid > 0 else None)
-    invoice.payment_mode = data.payment_mode
-    db.commit()
+    payment_service.create_payment(
+        db,
+        company_id,
+        PaymentCreate(
+            party_id=invoice.party_id,
+            invoice_id=invoice.id,
+            amount=float(amount),
+            payment_date=data.payment_date,
+            mode=_coerce_mode(data.payment_mode),
+        ),
+        created_by_id=created_by_id,
+    )
     return get_invoice(db, company_id, invoice.id)
+
+
+def create_outstanding(
+    db: Session, company: Company, data: OutstandingCreate, created_by_id: Optional[int]
+) -> Invoice:
+    """Quick manual outstanding entry: a minimal non-GST bill of ``amount``."""
+    party = party_service.get_party(db, company.id, data.party_id)
+    invoice_date = data.invoice_date or date.today()
+    due_date = _due_date(company, party, invoice_date, data.due_date)
+    amount = money(data.amount)
+
+    if data.invoice_number:
+        clash = db.execute(
+            select(Invoice.id).where(
+                Invoice.company_id == company.id,
+                Invoice.invoice_number == data.invoice_number,
+            )
+        ).first()
+        if clash:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An invoice with this number already exists",
+            )
+        invoice_number = data.invoice_number
+    else:
+        invoice_number = _next_invoice_number(db, company)
+
+    zero = Decimal("0")
+    item = InvoiceItem(
+        sr_no=1,
+        product_name=(data.remarks or "Outstanding")[:300],
+        quantity=money(1),
+        rate=amount,
+        taxable_amount=amount,
+        gst_rate=zero,
+        cgst_amount=zero,
+        sgst_amount=zero,
+        igst_amount=zero,
+        tax_amount=zero,
+        net_amount=amount,
+    )
+    invoice = Invoice(
+        company_id=company.id,
+        party_id=party.id,
+        created_by_id=created_by_id,
+        invoice_number=invoice_number,
+        invoice_date=invoice_date,
+        due_date=due_date,
+        gst_type=GstType.none,
+        total_taxable=amount,
+        total_cgst=zero,
+        total_sgst=zero,
+        total_igst=zero,
+        total_tax=zero,
+        round_off=zero,
+        grand_total=amount,
+        amount_in_words=amount_in_words(amount),
+        note=data.remarks,
+        payment_status=PaymentStatus.pending,
+        amount_paid=zero,
+        items=[item],
+    )
+    db.add(invoice)
+    db.commit()
+    return get_invoice(db, company.id, invoice.id)
 
 
 def delete_invoice(db: Session, company_id: int, invoice_id: int) -> None:

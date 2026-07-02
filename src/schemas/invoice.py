@@ -37,6 +37,7 @@ class InvoiceItemOut(ORMModel):
 class InvoiceCreate(BaseModel):
     party_id: int
     invoice_date: Optional[date] = None  # defaults to today
+    due_date: Optional[date] = None      # auto = invoice_date + party/company credit days
     document_type: DocumentType = DocumentType.invoice
     copy_type: str = Field(default="Original", max_length=20)
     invoice_number: Optional[str] = Field(default=None, max_length=50)  # auto if omitted
@@ -47,6 +48,20 @@ class InvoiceCreate(BaseModel):
     apply_gst: Optional[bool] = None
     round_off: float = 0
     items: list[InvoiceItemCreate] = Field(min_length=1)
+
+
+class OutstandingCreate(BaseModel):
+    """Quick manual outstanding entry — a bill without GST line items.
+
+    Creates a minimal non-GST invoice of ``amount`` so it flows through the
+    same outstanding / aging / ledger logic as a full bill."""
+
+    party_id: int
+    invoice_number: Optional[str] = Field(default=None, max_length=50)  # auto if omitted
+    invoice_date: Optional[date] = None
+    due_date: Optional[date] = None
+    amount: float = Field(gt=0)
+    remarks: Optional[str] = Field(default=None, max_length=1000)
 
 
 class InvoiceUpdate(BaseModel):
@@ -73,6 +88,7 @@ class InvoiceSummary(ORMModel):
     id: int
     invoice_number: str
     invoice_date: date
+    due_date: Optional[date] = None
     party_id: int
     grand_total: float
     amount_paid: float
@@ -86,6 +102,7 @@ class InvoiceOut(ORMModel):
     party_id: int
     invoice_number: str
     invoice_date: date
+    due_date: Optional[date] = None
     document_type: DocumentType
     copy_type: str
     place_of_supply: Optional[str] = None

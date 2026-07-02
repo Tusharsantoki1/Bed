@@ -14,8 +14,8 @@ from ..schemas.company import (
     CompanyUpdate,
 )
 from ..schemas.subscription import SubscriptionStatusInfo
-from ..schemas.user import StaffCreate, UserOut
-from ..services import company_service, subscription_service
+from ..schemas.user import StaffCreate, StaffUpdate, UserOut
+from ..services import backup_service, company_service, subscription_service
 from ..utils.deps import require_company_admin, require_company_user
 
 router = APIRouter(prefix="/company", tags=["company"])
@@ -74,6 +74,16 @@ def add_staff(
     return company_service.add_staff(db, current_user.company_id, payload)
 
 
+@router.patch("/staff/{user_id}", response_model=UserOut)
+def update_staff(
+    user_id: int,
+    payload: StaffUpdate,
+    current_user: User = Depends(require_company_admin),
+    db: Session = Depends(get_db),
+):
+    return company_service.update_staff(db, current_user.company_id, user_id, payload)
+
+
 @router.patch("/staff/{user_id}/active", response_model=UserOut)
 def set_staff_active(
     user_id: int,
@@ -82,3 +92,13 @@ def set_staff_active(
     db: Session = Depends(get_db),
 ):
     return company_service.set_staff_active(db, current_user.company_id, user_id, is_active)
+
+
+# --- Backup (company data export) ---
+
+@router.get("/backup")
+def export_backup(
+    current_user: User = Depends(require_company_admin), db: Session = Depends(get_db)
+):
+    """Download a JSON snapshot of all this company's data."""
+    return backup_service.export_company_data(db, current_user.company_id)

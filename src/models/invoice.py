@@ -23,6 +23,7 @@ from .mixins import TimestampMixin
 if TYPE_CHECKING:
     from .company import Company
     from .party import Party
+    from .payment import Payment
     from .user import User
 
 
@@ -46,6 +47,8 @@ class Invoice(Base, TimestampMixin):
 
     invoice_number: Mapped[str] = mapped_column(String(50), nullable=False)
     invoice_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # When payment is due (drives overdue / aging). Auto = invoice_date + credit_days.
+    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     document_type: Mapped[DocumentType] = mapped_column(
         Enum(DocumentType), nullable=False, default=DocumentType.invoice
     )
@@ -83,6 +86,10 @@ class Invoice(Base, TimestampMixin):
         back_populates="invoice",
         cascade="all, delete-orphan",
         order_by="InvoiceItem.sr_no",
+    )
+    payments: Mapped[list["Payment"]] = relationship(
+        back_populates="invoice",
+        order_by="Payment.payment_date",
     )
 
 

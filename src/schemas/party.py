@@ -17,6 +17,8 @@ class PartyCreate(BaseModel):
     gstin: Optional[str] = Field(default=None, max_length=20)
     phone: Optional[str] = Field(default=None, max_length=20)
     email: Optional[EmailStr] = None
+    credit_days: int = Field(default=0, ge=0, le=3650)
+    opening_balance: float = Field(default=0, ge=0)
 
 
 class PartyUpdate(BaseModel):
@@ -29,6 +31,8 @@ class PartyUpdate(BaseModel):
     gstin: Optional[str] = Field(default=None, max_length=20)
     phone: Optional[str] = Field(default=None, max_length=20)
     email: Optional[EmailStr] = None
+    credit_days: Optional[int] = Field(default=None, ge=0, le=3650)
+    opening_balance: Optional[float] = Field(default=None, ge=0)
 
 
 class PartyOut(ORMModel):
@@ -43,3 +47,5 @@ class PartyOut(ORMModel):
     gstin: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    credit_days: int = 0
+    opening_balance: float = 0

@@ -11,10 +11,14 @@ from .routes import (
     auth,
     company,
     dashboard,
+    followups,
     invoices,
     items,
     parties,
+    payments,
+    reports,
     superadmin,
+    whatsapp,
 )
 
 
@@ -59,5 +63,9 @@ app.include_router(company.router, prefix=api)
 app.include_router(parties.router, prefix=api)
 app.include_router(items.router, prefix=api)
 app.include_router(invoices.router, prefix=api)
+app.include_router(payments.router, prefix=api)
+app.include_router(followups.router, prefix=api)
+app.include_router(reports.router, prefix=api)
+app.include_router(whatsapp.router, prefix=api)
 app.include_router(dashboard.router, prefix=api)
 app.include_router(superadmin.router, prefix=api)
