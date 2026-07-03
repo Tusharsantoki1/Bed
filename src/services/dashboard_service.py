@@ -60,6 +60,14 @@ def company_dashboard(db: Session, company_id: int) -> dict:
         )
     ).scalar_one()
 
+    today_due = db.execute(
+        select(func.coalesce(func.sum(Invoice.grand_total - Invoice.amount_paid), 0)).where(
+            Invoice.company_id == company_id,
+            Invoice.due_date == today,
+            Invoice.payment_status != PaymentStatus.paid,
+        )
+    ).scalar_one()
+
     def collected(since=None) -> float:
         stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(
             Payment.company_id == company_id
@@ -93,6 +101,7 @@ def company_dashboard(db: Session, company_id: int) -> dict:
         "pending_count": count_status(PaymentStatus.pending),
         "total_parties": total_parties,
         "total_overdue": round(float(overdue), 2),
+        "today_due": round(float(today_due), 2),
         "today_collection": collected(),
         "month_collection": collected(month_start),
         "today_followups": today_followups,

@@ -15,13 +15,27 @@ from ..schemas.report import (
     CollectionReport,
     CollectionSummary,
     DailyCollectionReport,
+    NotificationList,
     OutstandingReport,
     PartyLedger,
+    WebDashboard,
 )
 from ..services import party_service, report_service
 from ..utils.deps import require_company_user
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+@router.get("/dashboard", response_model=WebDashboard)
+def web_dashboard(current_user: User = Depends(require_company_user), db: Session = Depends(get_db)):
+    """Aggregated data for the web dashboard (KPIs, overdue top-5, recent
+    collections, aging summary, today's follow-ups) in one call."""
+    return report_service.web_dashboard(db, current_user.company_id)
+
+
+@router.get("/notifications", response_model=NotificationList)
+def notifications(current_user: User = Depends(require_company_user), db: Session = Depends(get_db)):
+    return report_service.notifications(db, current_user.company_id)
 
 
 @router.get("/summary", response_model=CollectionSummary)

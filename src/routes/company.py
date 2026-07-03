@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Body, Depends, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -94,7 +94,7 @@ def set_staff_active(
     return company_service.set_staff_active(db, current_user.company_id, user_id, is_active)
 
 
-# --- Backup (company data export) ---
+# --- Backup (company data export / restore) ---
 
 @router.get("/backup")
 def export_backup(
@@ -102,3 +102,13 @@ def export_backup(
 ):
     """Download a JSON snapshot of all this company's data."""
     return backup_service.export_company_data(db, current_user.company_id)
+
+
+@router.post("/restore")
+def restore_backup(
+    payload: dict = Body(...),
+    current_user: User = Depends(require_company_admin),
+    db: Session = Depends(get_db),
+):
+    """Import a JSON snapshot into this company (additive; parties/items matched by name)."""
+    return backup_service.restore_company_data(db, current_user.company_id, payload)

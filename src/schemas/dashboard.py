@@ -14,6 +14,7 @@ class CompanyDashboard(BaseModel):
     total_parties: int
     # Collection KPIs
     total_overdue: float = 0
+    today_due: float = 0
     today_collection: float = 0
     month_collection: float = 0
     today_followups: int = 0

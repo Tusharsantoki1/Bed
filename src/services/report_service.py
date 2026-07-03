@@ -19,6 +19,7 @@ from ..models.payment import Payment
 from ..schemas.report import (
     AgingBuckets,
     AgingReport,
+    AgingSummary,
     BillReport,
     BillRow,
     CollectionReport,
@@ -26,11 +27,16 @@ from ..schemas.report import (
     CollectionSummary,
     DailyCollectionReport,
     DailyCollectionRow,
+    DashboardKpis,
     LedgerEntry,
+    Notification,
+    NotificationList,
     OutstandingPartyRow,
     OutstandingReport,
+    OverduePartyMini,
     PartyAgingRow,
     PartyLedger,
+    WebDashboard,
 )
 from ..utils.numbers import money
 
@@ -396,3 +402,97 @@ def collection_summary(db: Session, company_id: int) -> CollectionSummary:
         recent_payments=recent,
         upcoming_followups=upcoming,
     )
+
+
+# --- Web dashboard (aggregated) ------------------------------------------
+
+def web_dashboard(db: Session, company_id: int) -> WebDashboard:
+    """Everything the web dashboard needs in a single call."""
+    from . import dashboard_service, followup_service
+
+    today = date.today()
+    dash = dashboard_service.company_dashboard(db, company_id)
+
+    # Per-party overdue (top 5) + 4-bucket aging over open bills.
+    per_party: dict[int, dict] = {}
+    aging = {"b_0_30": Decimal("0"), "b_31_60": Decimal("0"),
+             "b_61_90": Decimal("0"), "b_90_plus": Decimal("0")}
+    for inv in _open_invoices(db, company_id):
+        balance = money(inv.grand_total) - money(inv.amount_paid)
+        od = _overdue_days(inv.due_date, today)
+        if od <= 30:
+            aging["b_0_30"] += balance
+        elif od <= 60:
+            aging["b_31_60"] += balance
+        elif od <= 90:
+            aging["b_61_90"] += balance
+        else:
+            aging["b_90_plus"] += balance
+        if od > 0:
+            row = per_party.setdefault(
+                inv.party_id, {"name": inv.party.name, "overdue": Decimal("0"), "days": 0}
+            )
+            row["overdue"] += balance
+            row["days"] = max(row["days"], od)
+
+    overdue_parties = [
+        OverduePartyMini(
+            party_id=pid, party_name=d["name"], overdue_days=d["days"], outstanding=_f(d["overdue"])
+        )
+        for pid, d in sorted(per_party.items(), key=lambda kv: -kv[1]["overdue"])[:5]
+    ]
+
+    aging_total = sum(aging.values(), Decimal("0"))
+    recent = collection_report(db, company_id).payments[:5]
+    followup_today = [followup_service.to_out(f) for f in followup_service.due_followups(db, company_id)[:5]]
+
+    return WebDashboard(
+        kpis=DashboardKpis(
+            total_outstanding=dash["total_outstanding"],
+            today_collection=dash["today_collection"],
+            today_due=dash["today_due"],
+            total_overdue=dash["total_overdue"],
+            month_collection=dash["month_collection"],
+            total_parties=dash["total_parties"],
+        ),
+        overdue_parties=overdue_parties,
+        recent_collections=recent,
+        aging_summary=AgingSummary(**{k: _f(v) for k, v in aging.items()}, total=_f(aging_total)),
+        followup_today=followup_today,
+    )
+
+
+def notifications(db: Session, company_id: int) -> NotificationList:
+    """Derived alerts for the top bar bell."""
+    today = date.today()
+    dash_overdue = 0
+    items: list[Notification] = []
+
+    overdue_bills = [inv for inv in _open_invoices(db, company_id) if _overdue_days(inv.due_date, today) > 0]
+    if overdue_bills:
+        total = _f(sum((money(i.grand_total) - money(i.amount_paid) for i in overdue_bills), Decimal("0")))
+        items.append(Notification(
+            type="overdue", severity="danger",
+            title=f"{len(overdue_bills)} overdue bill(s)",
+            message=f"Rs. {total:,.2f} is past due.",
+        ))
+        dash_overdue = len(overdue_bills)
+
+    due_today = [inv for inv in _open_invoices(db, company_id) if inv.due_date == today]
+    if due_today:
+        items.append(Notification(
+            type="due_today", severity="warning",
+            title=f"{len(due_today)} bill(s) due today",
+            message="Follow up to collect on time.",
+        ))
+
+    from . import followup_service
+    due_fu = followup_service.due_followups(db, company_id)
+    if due_fu:
+        items.append(Notification(
+            type="followup", severity="info",
+            title=f"{len(due_fu)} follow-up(s) due",
+            message="Pending follow-ups need action.",
+        ))
+
+    return NotificationList(count=len(items), items=items)

@@ -148,3 +148,49 @@ class WhatsAppMessage(BaseModel):
     outstanding: float
     message: str
     wa_link: Optional[str] = None
+
+
+# --- Web dashboard (one aggregated call) + notifications -----------------
+
+class DashboardKpis(BaseModel):
+    total_outstanding: float = 0
+    today_collection: float = 0
+    today_due: float = 0
+    total_overdue: float = 0
+    month_collection: float = 0
+    total_parties: int = 0
+
+
+class OverduePartyMini(BaseModel):
+    party_id: int
+    party_name: str
+    overdue_days: int
+    outstanding: float
+
+
+class AgingSummary(BaseModel):
+    b_0_30: float = 0
+    b_31_60: float = 0
+    b_61_90: float = 0
+    b_90_plus: float = 0
+    total: float = 0
+
+
+class WebDashboard(BaseModel):
+    kpis: DashboardKpis
+    overdue_parties: list[OverduePartyMini]
+    recent_collections: list[CollectionRow]
+    aging_summary: AgingSummary
+    followup_today: list[FollowupOut]
+
+
+class Notification(BaseModel):
+    type: str            # "overdue" | "due_today" | "followup"
+    severity: str        # "danger" | "warning" | "info"
+    title: str
+    message: str
+
+
+class NotificationList(BaseModel):
+    count: int
+    items: list[Notification]
