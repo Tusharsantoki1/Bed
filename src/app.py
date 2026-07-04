@@ -22,18 +22,10 @@ from .routes import (
 )
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Create tables on startup (use Alembic migrations in production).
-    create_all_tables()
-    yield
-
-
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
     description="Multi-tenant GST billing backend for the mobile billing app.",
-    lifespan=lifespan,
 )
 
 # CORS — Bearer-token auth, so credentials are not needed.

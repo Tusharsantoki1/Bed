@@ -8,7 +8,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from .config import settings
 
 engine = create_engine(
-    settings.database_url,
+    settings.SYNC_DATABASE_URL,
     pool_pre_ping=True,   # drop dead connections automatically
     pool_recycle=3600,    # recycle connections every hour (MySQL wait_timeout)
     echo=False,

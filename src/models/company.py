@@ -42,10 +42,10 @@ class Company(Base, TimestampMixin):
     pan: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Branding & artefacts (stored as base64 data — image bytes).
-    logo_base64: Mapped[Optional[str]] = mapped_column(Text(length=16_000_000), nullable=True)
-    signature_base64: Mapped[Optional[str]] = mapped_column(Text(length=16_000_000), nullable=True)
-    stamp_base64: Mapped[Optional[str]] = mapped_column(Text(length=16_000_000), nullable=True)
-    payment_qr_base64: Mapped[Optional[str]] = mapped_column(Text(length=16_000_000), nullable=True)
+    logo_base64: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    signature_base64: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    stamp_base64: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payment_qr_base64: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Bank / payment details printed on invoices.
     bank_name: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
