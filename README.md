@@ -1,6 +1,7 @@
 # GST Billing API
 
 A multi-tenant **GST billing backend** (FastAPI + MySQL) for a mobile billing app.
+A multi-tenant **GST billing backend** (FastAPI + PostgreSQL) for a mobile billing app.
 Companies register, set up their branding/bank details, add customers (parties),
 and generate invoices (with or without GST) as shareable PDFs. A **super admin**
 manages companies and their subscriptions.
@@ -24,9 +25,11 @@ A company can only create invoices while it has an **active subscription**
 
 - **FastAPI** (REST API, auto docs at `/docs`)
 - **MySQL** via SQLAlchemy 2.0 + PyMySQL
+- **PostgreSQL** via SQLAlchemy 2.0 + psycopg2
 - **JWT** auth (access + refresh) with bcrypt password hashing
 - **fpdf2** for invoice PDF generation
 - Images (logo, signature, stamp, payment QR) stored as **base64 in MySQL**
+- Images (logo, signature, stamp, payment QR) stored as **base64 in PostgreSQL**
 
 ---
 
@@ -66,6 +69,8 @@ Bed/
 ```sql
 -- log in to MySQL, then:
 CREATE DATABASE gst_billing CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- log in to psql, then:
+CREATE DATABASE gst_billing;
 ```
 
 ### 2. Configure `.env`

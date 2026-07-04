@@ -7,6 +7,9 @@ sqlalchemy
 psycopg[binary]  # PostgreSQL driver
 
 # --- Config & Security ---
+SQLAlchemy
+psycopg2-binary
+python-dotenv
 pydantic-settings
 python-dotenv
 passlib[bcrypt]
