@@ -1,14 +1,18 @@
 # --- FastAPI ---
 fastapi
 uvicorn[standard]
+alembic
+fpdf2
+python-multipart
 
 # --- Database (PostgreSQL) ---
+# Database (PostgreSQL)
 sqlalchemy
 psycopg[binary]  # PostgreSQL driver
+psycopg2-binary
 
 # --- Config & Security ---
-SQLAlchemy
-psycopg2-binary
+# Config & Security
 python-dotenv
 pydantic-settings
 python-dotenv
@@ -21,3 +25,4 @@ python-multipart  # for form data (file uploads)
 
 # --- Migrations ---
 alembic
+email-validator
