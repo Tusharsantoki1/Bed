@@ -19,7 +19,7 @@ from ..schemas.invoice import (
 )
 from ..services import company_service, invoice_service, pdf_service
 from ..utils.deps import (
-    require_active_subscription,
+    require_billing_access,
     require_company_editor,
     require_company_user,
 )
@@ -33,18 +33,20 @@ def list_invoices(
     party_id: int | None = None,
     skip: int = 0,
     limit: int = 50,
+    search: str | None = None,
     current_user: User = Depends(require_company_user),
     db: Session = Depends(get_db),
 ):
+    """List bills, newest first. `search` matches invoice number or party name."""
     return invoice_service.list_invoices(
-        db, current_user.company_id, payment_status, party_id, skip, limit
+        db, current_user.company_id, payment_status, party_id, skip, limit, search
     )
 
 
 @router.post("", response_model=InvoiceOut, status_code=status.HTTP_201_CREATED)
 def create_invoice(
     payload: InvoiceCreate,
-    current_user: User = Depends(require_active_subscription),
+    current_user: User = Depends(require_billing_access),
     db: Session = Depends(get_db),
 ):
     company = company_service.get_company(db, current_user.company_id)
@@ -74,7 +76,10 @@ def update_invoice(
 @router.post("/outstanding", response_model=InvoiceOut, status_code=status.HTTP_201_CREATED)
 def create_outstanding(
     payload: OutstandingCreate,
-    current_user: User = Depends(require_company_editor),
+    # Creating a bill here must be gated exactly like POST /invoices — this is
+    # the path the web app actually uses, so without the subscription guard the
+    # gate could be bypassed entirely.
+    current_user: User = Depends(require_billing_access),
     db: Session = Depends(get_db),
 ):
     """Quick manual outstanding entry (a bill without GST line items)."""
@@ -104,7 +109,25 @@ def delete_invoice(
     return Message(detail="Invoice deleted")
 
 
-@router.get("/{invoice_id}/pdf")
+@router.get("/{invoice_id}/preview", response_class=Response)
+def invoice_preview(
+    invoice_id: int,
+    current_user: User = Depends(require_company_user),
+    db: Session = Depends(get_db),
+):
+    """The bill as standalone HTML — the same template the PDF is rendered from,
+    so the in-app preview and the printed document cannot drift apart."""
+    invoice = invoice_service.get_invoice(db, current_user.company_id, invoice_id)
+    company = company_service.get_company(db, current_user.company_id)
+    html = pdf_service.render_invoice_html(invoice, company, standalone=True)
+    return Response(content=html, media_type="text/html; charset=utf-8")
+
+
+@router.get(
+    "/{invoice_id}/pdf",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+)
 def invoice_pdf(
     invoice_id: int,
     current_user: User = Depends(require_company_user),

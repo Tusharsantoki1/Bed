@@ -30,6 +30,7 @@ class CompanyUpdate(BaseModel):
     bank_account_no: Optional[str] = Field(default=None, max_length=50)
     bank_ifsc: Optional[str] = Field(default=None, max_length=20)
     upi_number: Optional[str] = Field(default=None, max_length=50)
+    upi_id: Optional[str] = Field(default=None, max_length=100)
 
     default_note: Optional[str] = Field(default=None, max_length=1000)
 
@@ -98,6 +99,7 @@ class CompanyOut(CompanySummary):
     bank_account_no: Optional[str] = None
     bank_ifsc: Optional[str] = None
     upi_number: Optional[str] = None
+    upi_id: Optional[str] = None
 
     invoice_prefix: str
     next_invoice_number: int

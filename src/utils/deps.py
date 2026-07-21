@@ -97,26 +97,43 @@ def require_company_admin(current_user: User = Depends(get_current_user)) -> Use
     return current_user
 
 
-def require_active_subscription(
-    current_user: User = Depends(require_company_user),
-    db: Session = Depends(get_db),
-) -> User:
-    """Block billing actions when the company has no active subscription."""
+def _assert_active_subscription(db: Session, company_id: int | None) -> None:
+    """Raise 402 unless the company has a subscription active today."""
     today = date.today()
     stmt = (
         select(Subscription)
         .where(
-            Subscription.company_id == current_user.company_id,
+            Subscription.company_id == company_id,
             Subscription.status == SubscriptionStatus.active,
             Subscription.start_date <= today,
             Subscription.end_date >= today,
         )
         .limit(1)
     )
-    active = db.execute(stmt).scalar_one_or_none()
-    if active is None:
+    if db.execute(stmt).scalar_one_or_none() is None:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Your subscription is inactive or expired. Please contact the administrator.",
         )
+
+
+def require_active_subscription(
+    current_user: User = Depends(require_company_user),
+    db: Session = Depends(get_db),
+) -> User:
+    """Block billing actions when the company has no active subscription."""
+    _assert_active_subscription(db, current_user.company_id)
+    return current_user
+
+
+def require_billing_access(
+    current_user: User = Depends(require_company_editor),
+    db: Session = Depends(get_db),
+) -> User:
+    """Creating a bill needs BOTH an editor role and an active subscription.
+
+    require_active_subscription alone only implies require_company_user, so on
+    its own it would let a read-only viewer create bills.
+    """
+    _assert_active_subscription(db, current_user.company_id)
     return current_user

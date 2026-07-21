@@ -52,6 +52,9 @@ class Company(Base, TimestampMixin):
     bank_account_no: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     bank_ifsc: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     upi_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # G-Pay/UPI number
+    # UPI VPA printed under the payment QR, e.g. "name@okhdfcbank". Distinct
+    # from upi_number, which is the G-Pay phone number shown in the bank block.
+    upi_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Invoice numbering: prefix + running counter (e.g. "EH/" + 46 -> "EH/46").
     invoice_prefix: Mapped[str] = mapped_column(String(20), nullable=False, default="INV/")

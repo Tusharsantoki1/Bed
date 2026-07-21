@@ -1,233 +1,240 @@
-"""Render an invoice to a PDF (bytes) using fpdf2, matching the sample layout."""
+"""Render an invoice to HTML and to PDF from a single shared template.
+
+The PDF (WeasyPrint) and the in-app preview both come from
+`templates/invoice.html`, so the printed bill and the on-screen bill cannot
+drift apart. WeasyPrint also gives real Unicode support, which the previous
+fpdf2 implementation lacked — the rupee sign and Gujarati text render fine.
+"""
 
 from __future__ import annotations
 
 import base64
 import binascii
-from io import BytesIO
+from decimal import Decimal
+from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
-from fpdf import FPDF
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..models.company import Company
-from ..models.enums import GstType
+from ..models.enums import DocumentType, GstType
 from ..models.invoice import Invoice
 
-# Item table column widths (mm); must sum to the usable page width (190).
-COLS = {
-    "sr": 8,
-    "product": 54,
-    "years": 20,
-    "qty": 12,
-    "rate": 20,
-    "taxable": 24,
-    "gst": 12,
-    "tax": 16,
-    "net": 24,
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
+
+# Measured off the reference bill: the item area is 115.4pt tall and each line
+# occupies 13.5pt. Short bills are padded with a filler row so the bank block
+# always lands in the same place.
+ITEMS_AREA_PT = 115.4
+ITEM_ROW_PT = 13.5
+# The product column is 31.8% of a 537.7pt table; at 7.5pt Times that fits
+# roughly 48 characters per line. Used to predict wrapping so the filler can
+# shrink accordingly instead of pushing the footer off the page.
+PRODUCT_CHARS_PER_LINE = 48
+
+
+# Rows render a fraction over their nominal 13.5pt, so a filler smaller than
+# this is dropped rather than tipping a nearly-full bill onto a second page.
+MIN_FILLER_PT = 12.0
+
+
+def _row_lines(name: str) -> int:
+    """How many lines the product name will wrap onto."""
+    if not name:
+        return 1
+    longest = max(len(part) for part in name.split("\n"))
+    return max(1, -(-longest // PRODUCT_CHARS_PER_LINE))  # ceil division
+
+
+def _filler_height(rows: list[dict]) -> float:
+    """Height of the blank row that pads the item area to the reference height."""
+    used = ITEM_ROW_PT * sum(_row_lines(r["product_name"]) for r in rows)
+    filler = ITEMS_AREA_PT - used
+    return round(filler, 1) if filler >= MIN_FILLER_PT else 0.0
+
+DOC_LABELS = {
+    DocumentType.invoice: "Tax Invoice",
+    DocumentType.debit_memo: "Debit Memo",
+    DocumentType.credit_memo: "Credit Memo",
 }
+
+# Sniff the image type from its first bytes so the data URI carries the right
+# MIME type — browsers are lenient about this, WeasyPrint is not.
+_MAGIC = [
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+]
+
+
+@lru_cache(maxsize=1)
+def _env() -> Environment:
+    return Environment(
+        loader=FileSystemLoader(str(TEMPLATE_DIR)),
+        autoescape=select_autoescape(["html"]),
+    )
+
+
+@lru_cache(maxsize=1)
+def _stylesheet() -> str:
+    return (TEMPLATE_DIR / "invoice.css").read_text(encoding="utf-8")
 
 
 def _money(value) -> str:
-    return f"{float(value):,.2f}"
+    """Plain 2-decimal money, matching the reference bill (no thousands commas
+    inside the item table)."""
+    return f"{Decimal(str(value or 0)):.2f}"
 
 
-def _img_reader(b64: Optional[str]) -> Optional[BytesIO]:
-    """Decode a base64 (optionally data-URI) image into a BytesIO, or None."""
+def _qty(value) -> str:
+    """Quantities print as integers when whole: 12 rather than 12.00."""
+    dec = Decimal(str(value or 0))
+    return str(int(dec)) if dec == dec.to_integral_value() else f"{dec:.2f}"
+
+
+def _rate(value) -> str:
+    """GST percentage without trailing zeros: 18.00 -> '18', 2.50 -> '2.5'.
+
+    Decimal's 'g' format keeps the stored scale ('18.00'), so normalize first;
+    'f' then avoids the exponent form normalize() can produce.
+    """
+    return format(Decimal(str(value or 0)).normalize(), "f")
+
+
+def _grand(value) -> str:
+    """Grand total keeps thousands separators, as on the reference bill."""
+    return f"{Decimal(str(value or 0)):,.2f}"
+
+
+def _data_uri(b64: Optional[str]) -> Optional[str]:
+    """Normalise a stored base64 image into a data URI usable by both renderers."""
     if not b64:
         return None
     data = b64.strip()
-    if data.startswith("data:") and "," in data:
-        data = data.split(",", 1)[1]
+    if not data:
+        return None
+    if data.startswith("data:"):
+        return data
     try:
         raw = base64.b64decode(data, validate=False)
     except (binascii.Error, ValueError):
         return None
     if not raw:
         return None
-    return BytesIO(raw)
+
+    mime = _sniff_mime(raw)
+    return f"data:{mime};base64,{data}"
 
 
-def _safe_image(pdf: FPDF, b64: Optional[str], x: float, y: float, w: float, h: float) -> None:
-    reader = _img_reader(b64)
-    if reader is None:
-        return
-    try:
-        pdf.image(reader, x=x, y=y, w=w, h=h)
-    except Exception:
-        # A bad image must never break invoice generation.
-        pass
+def _sniff_mime(raw: bytes) -> str:
+    """Detect the image type from its leading bytes, defaulting to PNG."""
+    for magic, candidate in _MAGIC:
+        if raw.startswith(magic):
+            return candidate
+    # WEBP and SVG need more than a fixed prefix.
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "image/webp"
+    head = raw[:256].lstrip()
+    if head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in raw[:1024]):
+        return "image/svg+xml"
+    return "image/png"
+
+
+def _build_context(invoice: Invoice, company: Company) -> dict:
+    party = invoice.party
+    has_gst = invoice.gst_type != GstType.none
+    inter_state = invoice.gst_type == GstType.inter_state
+
+    rows = []
+    for item in invoice.items:
+        if not has_gst:
+            tax_a = tax_b = ""
+        elif inter_state:
+            # IGST is a single figure; show it in the first sub-column.
+            tax_a, tax_b = _money(item.igst_amount), ""
+        else:
+            tax_a, tax_b = _money(item.cgst_amount), _money(item.sgst_amount)
+
+        rows.append(
+            {
+                "sr_no": item.sr_no,
+                "product_name": item.product_name,
+                "years": item.years or "",
+                "quantity": _qty(item.quantity),
+                "rate": _money(item.rate),
+                "taxable": _money(item.taxable_amount),
+                "gst_rate": _rate(item.gst_rate) if has_gst and item.gst_rate else "",
+                "tax_a": tax_a,
+                "tax_b": tax_b,
+                "net": _money(item.net_amount),
+            }
+        )
+
+    if not has_gst:
+        total_a = total_b = ""
+    elif inter_state:
+        total_a, total_b = _money(invoice.total_igst), ""
+    else:
+        total_a, total_b = _money(invoice.total_cgst), _money(invoice.total_sgst)
+
+    address_lines = [
+        p for p in [
+            company.address,
+            ", ".join(p for p in [company.city, company.state, company.pincode] if p),
+        ] if p
+    ]
+    party_lines = [
+        p for p in [
+            party.address,
+            ", ".join(p for p in [party.city, party.state] if p),
+            f"GSTIN : {party.gstin}" if party.gstin else None,
+        ] if p
+    ]
+
+    return {
+        "company": company,
+        "party": party,
+        "invoice": invoice,
+        "doc_label": DOC_LABELS.get(invoice.document_type, "Tax Invoice"),
+        "invoice_date": invoice.invoice_date.strftime("%d/%m/%Y"),
+        "due_date": invoice.due_date.strftime("%d/%m/%Y") if invoice.due_date else None,
+        "address_lines": address_lines,
+        "party_lines": party_lines,
+        "rows": rows,
+        "filler_height": _filler_height(rows),
+        "totals": {
+            "taxable": _money(invoice.total_taxable),
+            "tax_a": total_a,
+            "tax_b": total_b,
+            # Sum of the Net column, so it foots against the rows above. This is
+            # the grand total *before* round-off, which the Grand Total box shows.
+            "net": _money(sum(Decimal(str(i.net_amount or 0)) for i in invoice.items)),
+            "grand": _grand(invoice.grand_total),
+        },
+        "logo": _data_uri(company.logo_base64),
+        "qr": _data_uri(company.payment_qr_base64),
+        "signature": _data_uri(company.signature_base64),
+        "stamp": _data_uri(company.stamp_base64),
+        # The VPA shown under the QR; falls back to the G-Pay number if unset.
+        "upi_id": getattr(company, "upi_id", None) or company.upi_number or None,
+    }
+
+
+def render_invoice_html(invoice: Invoice, company: Company, standalone: bool = True) -> str:
+    """Render the bill as HTML. `standalone=True` inlines the CSS for preview."""
+    context = _build_context(invoice, company)
+    context["standalone"] = standalone
+    context["css"] = _stylesheet()
+    return _env().get_template("invoice.html").render(**context)
 
 
 def generate_invoice_pdf(invoice: Invoice, company: Company) -> bytes:
-    party = invoice.party
-    pdf = FPDF(orientation="P", unit="mm", format="A4")
-    pdf.set_auto_page_break(auto=True, margin=12)
-    pdf.set_margins(left=10, top=10, right=10)
-    pdf.add_page()
-    epw = pdf.epw  # effective page width (190mm)
-    x0 = pdf.l_margin
+    """Render the bill to PDF bytes. Signature unchanged from the fpdf2 version."""
+    # Imported here so the module still loads (for HTML preview) on machines
+    # without WeasyPrint's native libraries installed.
+    from weasyprint import CSS, HTML
 
-    # --- Header: company name/address (left) + logo (right) ---
-    header_h = 22
-    top = pdf.get_y()
-    pdf.rect(x0, top, epw, header_h)
-    _safe_image(pdf, company.logo_base64, x=x0 + epw - 32, y=top + 2, w=28, h=18)
-
-    pdf.set_xy(x0 + 2, top + 2)
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(epw - 36, 8, company.name, align="L")
-    pdf.set_xy(x0 + 2, top + 11)
-    pdf.set_font("Helvetica", "", 8)
-    addr_parts = [p for p in [company.address, company.city, company.state, company.pincode] if p]
-    pdf.multi_cell(epw - 36, 4, ", ".join(addr_parts), align="L")
-    pdf.set_y(top + header_h)
-
-    # --- Document type band ---
-    band_h = 7
-    by = pdf.get_y()
-    pdf.rect(x0, by, epw, band_h)
-    doc_label = {"invoice": "INVOICE", "debit_memo": "DEBIT MEMO", "credit_memo": "CREDIT MEMO"}.get(
-        invoice.document_type.value, "INVOICE"
-    )
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.set_xy(x0, by)
-    pdf.cell(epw / 3, band_h, "  Tax Invoice", align="L")
-    pdf.cell(epw / 3, band_h, doc_label, align="C")
-    pdf.cell(epw / 3, band_h, f"{invoice.copy_type}  ", align="R")
-    pdf.set_y(by + band_h)
-
-    # --- Party (left) + invoice meta (right) ---
-    info_h = 26
-    iy = pdf.get_y()
-    half = epw / 2
-    pdf.rect(x0, iy, half, info_h)
-    pdf.rect(x0 + half, iy, half, info_h)
-
-    pdf.set_xy(x0 + 2, iy + 2)
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(half - 4, 5, f"M/s. : {party.name}", align="L")
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_xy(x0 + 2, iy + 8)
-    city_state = ", ".join(p for p in [party.city, party.state] if p)
-    party_lines = [p for p in [party.address, city_state] if p]
-    if party_lines:
-        pdf.multi_cell(half - 4, 4, "\n".join(party_lines), align="L")
-    # Place of supply + GSTIN pinned to the bottom of the box.
-    pdf.set_xy(x0 + 2, iy + info_h - 9)
-    pdf.cell(half - 4, 4, f"Place of Supply : {invoice.place_of_supply or '-'}", align="L")
-    pdf.set_xy(x0 + 2, iy + info_h - 5)
-    pdf.cell(half - 4, 4, f"GSTIN : {party.gstin or '-'}", align="L")
-
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_xy(x0 + half + 2, iy + 4)
-    pdf.cell(half - 4, 6, f"Invoice No.  :  {invoice.invoice_number}", align="L")
-    pdf.set_xy(x0 + half + 2, iy + 12)
-    pdf.cell(half - 4, 6, f"Date         :  {invoice.invoice_date.strftime('%d/%m/%Y')}", align="L")
-    pdf.set_y(iy + info_h)
-
-    # --- Items table header ---
-    pdf.set_font("Helvetica", "B", 8)
-    row_h = 7
-    headers = [
-        ("sr", "Sr"), ("product", "Product Name"), ("years", "Years"),
-        ("qty", "Qty"), ("rate", "Rate"), ("taxable", "Taxable"),
-        ("gst", "GST%"), ("tax", "Tax"), ("net", "Net Amt"),
-    ]
-    hy = pdf.get_y()
-    for key, label in headers:
-        align = "L" if key == "product" else "C"
-        pdf.cell(COLS[key], row_h, label, border=1, align=align)
-    pdf.ln(row_h)
-
-    # --- Items rows ---
-    pdf.set_font("Helvetica", "", 8)
-    has_gst = invoice.gst_type != GstType.none
-    for item in invoice.items:
-        pdf.cell(COLS["sr"], row_h, str(item.sr_no), border=1, align="C")
-        name = item.product_name if len(item.product_name) <= 40 else item.product_name[:39] + "…"
-        pdf.cell(COLS["product"], row_h, name, border=1, align="L")
-        pdf.cell(COLS["years"], row_h, item.years or "", border=1, align="C")
-        pdf.cell(COLS["qty"], row_h, _money(item.quantity), border=1, align="R")
-        pdf.cell(COLS["rate"], row_h, _money(item.rate), border=1, align="R")
-        pdf.cell(COLS["taxable"], row_h, _money(item.taxable_amount), border=1, align="R")
-        pdf.cell(COLS["gst"], row_h, f"{float(item.gst_rate):g}" if has_gst and item.gst_rate else "", border=1, align="C")
-        pdf.cell(COLS["tax"], row_h, _money(item.tax_amount) if has_gst else "", border=1, align="R")
-        pdf.cell(COLS["net"], row_h, _money(item.net_amount), border=1, align="R")
-        pdf.ln(row_h)
-
-    # --- Totals row ---
-    pdf.set_font("Helvetica", "B", 8)
-    label_w = COLS["sr"] + COLS["product"] + COLS["years"] + COLS["qty"] + COLS["rate"]
-    pdf.cell(label_w, row_h, "Total", border=1, align="R")
-    pdf.cell(COLS["taxable"], row_h, _money(invoice.total_taxable), border=1, align="R")
-    pdf.cell(COLS["gst"], row_h, "", border=1)
-    pdf.cell(COLS["tax"], row_h, _money(invoice.total_tax) if has_gst else "", border=1, align="R")
-    pdf.cell(COLS["net"], row_h, _money(invoice.grand_total), border=1, align="R")
-    pdf.ln(row_h)
-
-    # --- GST breakup line (only when GST applies) ---
-    pdf.set_font("Helvetica", "", 8)
-    if has_gst:
-        if invoice.gst_type == GstType.inter_state:
-            breakup = f"IGST: {_money(invoice.total_igst)}"
-        else:
-            breakup = f"CGST: {_money(invoice.total_cgst)}   SGST: {_money(invoice.total_sgst)}"
-        pdf.cell(epw, 5, breakup, align="R")
-        pdf.ln(6)
-    else:
-        pdf.ln(2)
-
-    # --- Bank details (left) + QR (right) ---
-    box_h = 30
-    bxy = pdf.get_y()
-    left_w = epw * 0.62
-    right_w = epw - left_w
-    pdf.rect(x0, bxy, left_w, box_h)
-    pdf.rect(x0 + left_w, bxy, right_w, box_h)
-
-    pdf.set_xy(x0 + 2, bxy + 2)
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(left_w - 4, 5, "Bank Details", align="L")
-    pdf.set_font("Helvetica", "", 8)
-    bank_lines = [
-        f"Bank Name   : {company.bank_name or '-'}",
-        f"A/c No.     : {company.bank_account_no or '-'}",
-        f"IFSC Code   : {company.bank_ifsc or '-'}",
-        f"G-Pay / UPI : {company.upi_number or '-'}",
-    ]
-    pdf.set_xy(x0 + 2, bxy + 8)
-    pdf.multi_cell(left_w - 4, 5, "\n".join(bank_lines), align="L")
-
-    _safe_image(pdf, company.payment_qr_base64, x=x0 + left_w + (right_w - 24) / 2, y=bxy + 3, w=24, h=24)
-    pdf.set_y(bxy + box_h)
-
-    # --- Amount in words + grand total ---
-    words_h = 9
-    wy = pdf.get_y()
-    pdf.rect(x0, wy, left_w, words_h)
-    pdf.rect(x0 + left_w, wy, right_w, words_h)
-    pdf.set_xy(x0 + 2, wy)
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(left_w - 4, words_h, f"Amount: {invoice.amount_in_words or ''}", align="L")
-    pdf.set_xy(x0 + left_w, wy)
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(right_w, words_h, f"Total  {_money(invoice.grand_total)}", align="C")
-    pdf.set_y(wy + words_h)
-
-    # --- Note + signature/stamp ---
-    sy = pdf.get_y() + 2
-    pdf.set_xy(x0, sy)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.multi_cell(left_w, 4, f"Note: {invoice.note or ''}", align="L")
-
-    _safe_image(pdf, company.stamp_base64, x=x0 + left_w, y=sy, w=22, h=22)
-    _safe_image(pdf, company.signature_base64, x=x0 + epw - 40, y=sy, w=34, h=18)
-    pdf.set_xy(x0 + left_w, sy + 22)
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(right_w, 5, f"For {company.name}", align="R")
-    pdf.set_xy(x0 + left_w, sy + 27)
-    pdf.set_font("Helvetica", "", 7)
-    pdf.cell(right_w, 4, "(Authorised Signatory)", align="R")
-
-    out = pdf.output()
-    return bytes(out)
+    html = render_invoice_html(invoice, company, standalone=False)
+    return HTML(string=html).write_pdf(stylesheets=[CSS(string=_stylesheet())])

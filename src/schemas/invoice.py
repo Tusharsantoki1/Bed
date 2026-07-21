@@ -90,6 +90,7 @@ class InvoiceSummary(ORMModel):
     invoice_date: date
     due_date: Optional[date] = None
     party_id: int
+    party_name: Optional[str] = None
     grand_total: float
     amount_paid: float
     payment_status: PaymentStatus

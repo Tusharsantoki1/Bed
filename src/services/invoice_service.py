@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Iterable, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models.company import Company
@@ -170,12 +170,24 @@ def list_invoices(
     party_id: int | None = None,
     skip: int = 0,
     limit: int = 50,
+    search: str | None = None,
 ) -> list[Invoice]:
-    stmt = select(Invoice).where(Invoice.company_id == company_id)
+    # The party is eager-loaded because every row renders its name; without this
+    # a 50-row page would fire 50 extra queries.
+    stmt = (
+        select(Invoice)
+        .options(selectinload(Invoice.party))
+        .where(Invoice.company_id == company_id)
+    )
     if payment_status is not None:
         stmt = stmt.where(Invoice.payment_status == payment_status)
     if party_id is not None:
         stmt = stmt.where(Invoice.party_id == party_id)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        stmt = stmt.join(Invoice.party).where(
+            or_(Invoice.invoice_number.ilike(term), Party.name.ilike(term))
+        )
     stmt = stmt.order_by(Invoice.invoice_date.desc(), Invoice.id.desc()).offset(skip).limit(limit)
     return list(db.execute(stmt).scalars())
 

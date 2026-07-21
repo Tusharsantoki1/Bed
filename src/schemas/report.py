@@ -146,7 +146,13 @@ class WhatsAppMessage(BaseModel):
     party_name: str
     phone: Optional[str] = None
     outstanding: float
+    # The message in the requested language, plus every language keyed by code
+    # ("en" / "gu") so the UI can toggle without another round trip.
     message: str
+    messages: dict[str, str] = {}
+    language: str = "en"
+    # Normalised wa.me number; None means the phone is unusable for WhatsApp.
+    wa_number: Optional[str] = None
     wa_link: Optional[str] = None
 
 

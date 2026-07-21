@@ -1,0 +1,183 @@
+{#
+  Invoice sheet. Rendered twice from the same source:
+    * WeasyPrint -> the downloadable PDF
+    * served as HTML -> the in-app preview
+  so the two can never drift apart.
+
+  `standalone` wraps the markup in a full document with the stylesheet inlined
+  (used for the preview); the PDF path passes the CSS to WeasyPrint separately.
+#}
+{% if standalone %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ invoice.invoice_number }}</title>
+{# `safe` is required: autoescaping would turn child selectors like
+   `.band > div` into `.band &gt; div` and silently break the stylesheet.
+   The value is our own file, never user input. #}
+<style>{{ css|safe }}</style>
+</head>
+<body>
+{% endif %}
+<div class="bill">
+  <div class="sheet">
+
+    <div class="hdr">
+      <div class="hdr-left">
+        <div class="co-name">{{ company.name }}</div>
+        {% if address_lines %}
+        <div class="co-addr">
+          {% for line in address_lines %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        {% if company.phone or company.email %}
+        <div class="co-meta">
+          {%- if company.phone %}Ph.: {{ company.phone }}{% endif -%}
+          {%- if company.phone and company.email %} &nbsp;|&nbsp; {% endif -%}
+          {%- if company.email %}{{ company.email }}{% endif -%}
+        </div>
+        {% endif %}
+      </div>
+      <div class="hdr-right">
+        {% if logo %}<img src="{{ logo }}" alt="">{% endif %}
+      </div>
+    </div>
+
+    <div class="band">
+      <div class="band-l">{{ doc_label }}</div>
+      <div class="band-c">INVOICE</div>
+      <div class="band-r">{{ invoice.copy_type }}</div>
+    </div>
+
+    <div class="party">
+      <div class="party-l">
+        <div class="party-name">M/s. : <b>{{ party.name }}</b></div>
+        {% if party_lines %}
+        <div class="party-addr">
+          {% for line in party_lines %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+        </div>
+        {% endif %}
+        <div class="party-pos">
+          Place of Supply : {{ invoice.place_of_supply or '-' }}
+        </div>
+      </div>
+      <div class="party-r">
+        <div class="meta-row">
+          <div class="meta-k">Invoice No.</div>
+          <div class="meta-v">: {{ invoice.invoice_number }}</div>
+        </div>
+        <div class="meta-row">
+          <div class="meta-k">Date</div>
+          <div class="meta-v">: {{ invoice_date }}</div>
+        </div>
+        {% if due_date %}
+        <div class="meta-row">
+          <div class="meta-k">Due Date</div>
+          <div class="meta-v">: {{ due_date }}</div>
+        </div>
+        {% endif %}
+        <div class="meta-row meta-fill"><div class="meta-k">&nbsp;</div><div class="meta-v"></div></div>
+      </div>
+    </div>
+
+    <table class="items">
+      {# Column widths are the measured proportions of the reference bill. #}
+      <thead>
+        <tr class="h1">
+          <th rowspan="2" style="width:3.35%">Sr.</th>
+          <th rowspan="2" style="width:31.80%">Product Name</th>
+          <th rowspan="2" style="width:8.37%">YEARS</th>
+          <th rowspan="2" style="width:8.24%">Qty</th>
+          <th rowspan="2" style="width:10.04%">Rate</th>
+          <th rowspan="2" style="width:8.37%">Taxable<br>Amount</th>
+          <th rowspan="2" style="width:4.31%">GST<br>%</th>
+          <th colspan="2" style="width:16.33%">Tax Amount</th>
+          <th rowspan="2" style="width:9.19%">Net<br>Amount</th>
+        </tr>
+        <tr class="h2">
+          <th style="width:8.09%"></th>
+          <th style="width:8.24%"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td class="c">{{ row.sr_no }}</td>
+          <td class="name">{{ row.product_name }}</td>
+          <td class="years">{{ row.years }}</td>
+          <td class="c">{{ row.quantity }}</td>
+          <td class="r">{{ row.rate }}</td>
+          <td class="r">{{ row.taxable }}</td>
+          <td class="c">{{ row.gst_rate }}</td>
+          <td class="r">{{ row.tax_a }}</td>
+          <td class="r">{{ row.tax_b }}</td>
+          <td class="r">{{ row.net }}</td>
+        </tr>
+        {% endfor %}
+        {# Pads the item area out to the reference height so the bank block
+           always lands in the same place, however many lines there are. #}
+        {% if filler_height %}
+        <tr class="filler" style="height:{{ filler_height }}pt">
+          <td></td><td></td><td></td><td></td><td></td>
+          <td></td><td></td><td></td><td></td><td></td>
+        </tr>
+        {% endif %}
+        <tr class="totals">
+          <td colspan="3" class="gstin-cell">GSTIN No.: {{ company.gstin or '' }}</td>
+          <td colspan="2" class="total-label">Total</td>
+          <td class="r">{{ totals.taxable }}</td>
+          <td></td>
+          <td class="r">{{ totals.tax_a }}</td>
+          <td class="r">{{ totals.tax_b }}</td>
+          <td class="r">{{ totals.net }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="foot">
+      <div class="foot-bank">
+        <table class="bank-tbl">
+          <tr><td class="k">Bank Name</td><td class="sep">:</td><td>{{ company.bank_name or '' }}</td></tr>
+          <tr><td class="k">Bank A/c. No.</td><td class="sep">:</td><td>{{ company.bank_account_no or '' }}</td></tr>
+          <tr><td class="k">RTGS/IFSC Code</td><td class="sep">:</td><td>{{ company.bank_ifsc or '' }}</td></tr>
+          <tr class="gpay"><td class="k">G-PAY NO.</td><td class="sep">:</td><td>{{ company.upi_number or '' }}</td></tr>
+        </table>
+        <div class="words">
+          <b>Bill Amount :</b>
+          <span class="words-text">{{ invoice.amount_in_words or '' }}</span>
+        </div>
+      </div>
+
+      <div class="foot-qr">
+        {% if qr %}<img src="{{ qr }}" alt="">{% endif %}
+        {% if upi_id %}<div class="upi-id">UPI ID: {{ upi_id }}</div>{% endif %}
+      </div>
+
+      <div class="foot-total">
+        <div class="spacer"></div>
+        <div class="grand">
+          <span>Grand Total</span><span>{{ totals.grand }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <div class="note-l">
+        <b>NOTE :</b> {{ invoice.note or '' }}
+      </div>
+      <div class="note-r">
+        <div>{{ company.name }}</div>
+        <div class="sign-imgs">
+          {% if stamp %}<img src="{{ stamp }}" alt="">{% endif %}
+          {% if signature %}<img src="{{ signature }}" alt="">{% endif %}
+        </div>
+        <div class="sign-label">(Authorised Signatory)</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% if standalone %}
+</body>
+</html>
+{% endif %}

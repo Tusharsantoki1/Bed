@@ -92,6 +92,11 @@ class Invoice(Base, TimestampMixin):
         order_by="Payment.payment_date",
     )
 
+    @property
+    def party_name(self) -> Optional[str]:
+        """Convenience for list responses, so the UI need not resolve party ids."""
+        return self.party.name if self.party else None
+
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"

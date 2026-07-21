@@ -1,0 +1,304 @@
+/* Invoice sheet — shared by the WeasyPrint PDF and the in-app HTML preview.
+
+   Every dimension below was measured off the reference bill by extracting its
+   vector rules, so the output lines up with it rather than approximating:
+
+     page          210mm x 152.4mm (A4 width, 6in tall) — not a full A4 sheet
+     sheet         537.7pt wide, 409.4pt tall
+     columns (%)   Sr 3.35 | Product 31.80 | YEARS 8.37 | Qty 8.24 | Rate 10.04
+                   | Taxable 8.37 | GST% 4.31 | Tax Amount 16.33 | Net 9.19
+     band heights  header 46.5 | doc band 15.7 | party 76.6 | thead 14.2+13.5
+                   | items 115.4 | totals 15.0 | bank 31.5+12.8 | words 18.8
+                   | note 45.7   (all pt)
+*/
+
+@page {
+  size: 210mm 152.4mm;
+  margin: 4mm 10mm;
+}
+
+/* WeasyPrint applies a default body margin, which would push the sheet onto a
+   second page. */
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+.bill * {
+  box-sizing: border-box;
+}
+
+.bill {
+  /* Times New Roman, with a Gujarati-capable fallback so party names or notes
+     in Gujarati render instead of dropping to tofu. */
+  font-family: "Times New Roman", Times, "Liberation Serif", "Gujarati Sangam MN", serif;
+  font-size: 8pt;
+  line-height: 1.2;
+  color: #000;
+  background: #fff;
+}
+
+.sheet {
+  border: 0.8pt solid #000;
+}
+
+/* --- header: company identity (left) + logo (right) --- */
+.hdr {
+  display: flex;
+  height: 46.5pt;
+  border-bottom: 0.8pt solid #000;
+}
+.hdr-left {
+  flex: 1;
+  padding: 3pt 5pt;
+  border-right: 0.8pt solid #000;
+  overflow: hidden;
+}
+.hdr-right {
+  width: 175pt;
+  padding: 2pt;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hdr-right img {
+  max-width: 100%;
+  max-height: 40pt;
+  object-fit: contain; /* never distort an uploaded logo */
+}
+.co-name {
+  font-size: 17pt;
+  line-height: 1.05;
+  letter-spacing: 0.1pt;
+}
+.co-addr {
+  font-size: 6.5pt;
+  line-height: 1.3;
+  margin-top: 1.5pt;
+}
+.co-meta {
+  font-size: 6.5pt;
+  margin-top: 1pt;
+}
+
+/* --- Debit Memo | INVOICE | Original --- */
+.band {
+  display: flex;
+  align-items: center;
+  height: 15.7pt;
+  border-bottom: 0.8pt solid #000;
+  font-weight: bold;
+  font-size: 8pt;
+}
+.band > div { padding: 0 5pt; }
+.band .band-l { width: 32%; }
+.band .band-c { flex: 1; text-align: center; letter-spacing: 0.3pt; }
+.band .band-r { width: 32%; text-align: right; }
+
+/* --- party (left) + invoice meta (right) --- */
+.party {
+  display: flex;
+  height: 76.6pt;
+  border-bottom: 0.8pt solid #000;
+}
+.party-l {
+  flex: 1;
+  border-right: 0.8pt solid #000;
+  padding: 5pt 7pt;
+  /* Absolute positioning rather than `margin-top:auto` — WeasyPrint's flex
+     support does not honour auto margins reliably. */
+  position: relative;
+  overflow: hidden;
+}
+.party-name { font-size: 9pt; }
+.party-name b { font-size: 11pt; }
+.party-addr {
+  font-size: 7pt;
+  margin-top: 2pt;
+}
+/* Sits low in the box, as on the reference bill. */
+.party-pos {
+  position: absolute;
+  left: 7pt;
+  bottom: 8pt;
+  font-size: 7.5pt;
+}
+.party-r {
+  width: 38%;
+  display: flex;
+  flex-direction: column;
+}
+.meta-row {
+  display: flex;
+  height: 14.6pt;
+  border-bottom: 0.8pt solid #000;
+}
+.meta-k { width: 66pt; padding: 2pt 4pt; font-weight: bold; }
+.meta-v { flex: 1; padding: 2pt 4pt; font-weight: bold; }
+/* Blank box under the invoice number / date rows. */
+.meta-fill { flex: 1; border-bottom: 0; }
+
+/* --- line items --- */
+.items {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.items th,
+.items td {
+  border: 0.8pt solid #000;
+  padding: 1.5pt 3pt;
+  font-size: 7.5pt;
+  vertical-align: top;
+}
+.items thead th {
+  font-weight: bold;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 1.1;
+  padding: 1pt 2pt;
+}
+.items thead tr.h1 th { height: 14.2pt; }
+.items thead tr.h2 th { height: 13.5pt; }
+/* Repeat the header if a long bill spills onto a second page. */
+.items thead { display: table-header-group; }
+.items tbody tr { page-break-inside: avoid; }
+/* The reference bill draws no rules *between* item rows — the item area reads
+   as one open box crossed only by the vertical column rules. */
+.items tbody td {
+  height: 13.5pt;
+  padding: 0 3pt;
+  border-top: 0;
+  border-bottom: 0;
+  vertical-align: middle;
+}
+
+.items td.c { text-align: center; }
+.items td.r { text-align: right; }
+.items td.years { text-align: center; color: #1a7a3c; }
+.items td.name { word-wrap: break-word; }
+
+/* Blank filler that pads the item area out to the reference height. Its height
+   is set inline on the row by the renderer, since it depends on the number of
+   lines — so the cells must not carry the 13.5pt item-row height, which would
+   win over the row's own height and overshoot the page. */
+.filler td {
+  height: auto;
+  border-top: 0;
+  padding: 0;
+}
+
+.totals td {
+  font-weight: bold;
+  height: 15pt;
+  vertical-align: middle;
+}
+.gstin-cell { text-align: left; }
+.total-label { text-align: center; }
+
+/* --- bank / QR / grand total --- */
+.foot {
+  display: flex;
+  border-top: 0.8pt solid #000;
+}
+.foot-bank {
+  width: 46%;
+  border-right: 0.8pt solid #000;
+}
+.bank-tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+.bank-tbl td {
+  height: 10.5pt;
+  padding: 0 4pt;
+  font-size: 7pt;
+  border: 0;
+}
+.bank-tbl td.k { width: 74pt; font-weight: bold; }
+.bank-tbl td.sep { width: 7pt; }
+.bank-tbl tr.gpay td {
+  height: 12.8pt;
+  border-top: 0.8pt solid #000;
+  color: #c00000;
+  font-weight: bold;
+}
+.words {
+  height: 18.8pt;
+  border-top: 0.8pt solid #000;
+  padding: 4pt;
+  font-size: 7.5pt;
+  overflow: hidden;
+}
+/* The amount in words is italic on the reference bill. */
+.words .words-text { font-style: italic; }
+
+.foot-qr {
+  width: 26%;
+  border-right: 0.8pt solid #000;
+  padding: 2pt;
+  text-align: center;
+}
+.foot-qr img {
+  max-width: 100%;
+  max-height: 56pt;
+  object-fit: contain;
+}
+.upi-id {
+  font-size: 5.5pt;
+  margin-top: 1pt;
+  word-break: break-all;
+}
+
+.foot-total {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.foot-total .spacer { flex: 1; }
+.grand {
+  height: 18.8pt;
+  border-top: 0.8pt solid #000;
+  padding: 0 6pt;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: bold;
+  font-size: 10pt;
+}
+
+/* --- note + signature --- */
+.note {
+  display: flex;
+  height: 45.7pt;
+  border-top: 0.8pt solid #000;
+}
+.note-l {
+  flex: 1;
+  padding: 3pt 5pt;
+  font-size: 7pt;
+  overflow: hidden;
+}
+.note-r {
+  width: 40%;
+  padding: 3pt 5pt;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 8pt;
+}
+.sign-imgs {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5pt;
+  min-height: 0;
+}
+.sign-imgs img {
+  max-height: 26pt;
+  max-width: 70pt;
+  object-fit: contain;
+}
+.sign-label { font-size: 6.5pt; }
