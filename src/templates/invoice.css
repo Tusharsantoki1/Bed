@@ -39,13 +39,13 @@ html, body {
 }
 
 .sheet {
-  border: 0.8pt solid #000;
+  border: 3pt double #000;
 }
 
 /* --- header: company identity (left) + logo (right) --- */
 .hdr {
   display: flex;
-  height: 46.5pt;
+  min-height: 46.5pt;
   border-bottom: 0.8pt solid #000;
 }
 .hdr-left {
@@ -53,6 +53,7 @@ html, body {
   padding: 3pt 5pt;
   border-right: 0.8pt solid #000;
   overflow: hidden;
+  text-align: center;
 }
 .hdr-right {
   width: 175pt;
@@ -72,12 +73,13 @@ html, body {
   letter-spacing: 0.1pt;
 }
 .co-addr {
-  font-size: 6.5pt;
+  font-size: 7.5pt;
   line-height: 1.3;
   margin-top: 1.5pt;
+  padding-bottom: 2pt;
 }
 .co-meta {
-  font-size: 6.5pt;
+  font-size: 7.5pt;
   margin-top: 1pt;
 }
 
@@ -113,7 +115,7 @@ html, body {
 .party-name { font-size: 9pt; }
 .party-name b { font-size: 11pt; }
 .party-addr {
-  font-size: 7pt;
+  font-size: 8pt;
   margin-top: 2pt;
 }
 /* Sits low in the box, as on the reference bill. */
@@ -121,10 +123,10 @@ html, body {
   position: absolute;
   left: 7pt;
   bottom: 8pt;
-  font-size: 7.5pt;
+  font-size: 8.5pt;
 }
 .party-r {
-  width: 38%;
+  width: 38.2%;
   display: flex;
   flex-direction: column;
 }
@@ -132,11 +134,12 @@ html, body {
   display: flex;
   height: 14.6pt;
   border-bottom: 0.8pt solid #000;
+  background-color: #f2f2f2;
 }
 .meta-k { width: 66pt; padding: 2pt 4pt; font-weight: bold; }
 .meta-v { flex: 1; padding: 2pt 4pt; font-weight: bold; }
 /* Blank box under the invoice number / date rows. */
-.meta-fill { flex: 1; border-bottom: 0; }
+.meta-fill { flex: 1; border-bottom: 0; background-color: transparent; }
 
 /* --- line items --- */
 .items {
@@ -148,8 +151,16 @@ html, body {
 .items td {
   border: 0.8pt solid #000;
   padding: 1.5pt 3pt;
-  font-size: 7.5pt;
+  font-size: 8.5pt;
   vertical-align: top;
+}
+.items th:first-child,
+.items td:first-child {
+  border-left: 0;
+}
+.items th:last-child,
+.items td:last-child {
+  border-right: 0;
 }
 .items thead th {
   font-weight: bold;
@@ -158,7 +169,7 @@ html, body {
   line-height: 1.1;
   padding: 1pt 2pt;
 }
-.items thead tr.h1 th { height: 14.2pt; }
+.items thead tr.h1 th { height: 14.2pt; border-top: 0; }
 .items thead tr.h2 th { height: 13.5pt; }
 /* Repeat the header if a long bill spills onto a second page. */
 .items thead { display: table-header-group; }
@@ -188,10 +199,12 @@ html, body {
   padding: 0;
 }
 
-.totals td {
+.items .totals td {
   font-weight: bold;
   height: 15pt;
   vertical-align: middle;
+  border-top: 0.8pt solid #000;
+  background-color: #f2f2f2;
 }
 .gstin-cell { text-align: left; }
 .total-label { text-align: center; }
@@ -210,9 +223,9 @@ html, body {
   border-collapse: collapse;
 }
 .bank-tbl td {
-  height: 10.5pt;
+  height: 11.5pt;
   padding: 0 4pt;
-  font-size: 7pt;
+  font-size: 8pt;
   border: 0;
 }
 .bank-tbl td.k { width: 74pt; font-weight: bold; }
@@ -227,7 +240,7 @@ html, body {
   height: 18.8pt;
   border-top: 0.8pt solid #000;
   padding: 4pt;
-  font-size: 7.5pt;
+  font-size: 8.5pt;
   overflow: hidden;
 }
 /* The amount in words is italic on the reference bill. */
@@ -245,7 +258,7 @@ html, body {
   object-fit: contain;
 }
 .upi-id {
-  font-size: 5.5pt;
+  font-size: 6.5pt;
   margin-top: 1pt;
   word-break: break-all;
 }
@@ -265,6 +278,7 @@ html, body {
   justify-content: space-between;
   font-weight: bold;
   font-size: 10pt;
+  background-color: #f2f2f2;
 }
 
 /* --- note + signature --- */
@@ -276,7 +290,7 @@ html, body {
 .note-l {
   flex: 1;
   padding: 3pt 5pt;
-  font-size: 7pt;
+  font-size: 8pt;
   overflow: hidden;
 }
 .note-r {
@@ -301,4 +315,4 @@ html, body {
   max-width: 70pt;
   object-fit: contain;
 }
-.sign-label { font-size: 6.5pt; }
+.sign-label { font-size: 7.5pt; }
