@@ -14,12 +14,13 @@
 
 @page {
   size: 210mm 152.4mm;
-  margin: 4mm 10mm;
+  margin: 1mm 10mm;
 }
 
 /* WeasyPrint applies a default body margin, which would push the sheet onto a
    second page. */
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
 }
@@ -48,6 +49,7 @@ html, body {
   min-height: 46.5pt;
   border-bottom: 0.8pt solid #000;
 }
+
 .hdr-left {
   flex: 1;
   padding: 3pt 5pt;
@@ -55,6 +57,7 @@ html, body {
   overflow: hidden;
   text-align: center;
 }
+
 .hdr-right {
   width: 175pt;
   padding: 2pt;
@@ -62,22 +65,27 @@ html, body {
   align-items: center;
   justify-content: center;
 }
+
 .hdr-right img {
   max-width: 100%;
   max-height: 40pt;
-  object-fit: contain; /* never distort an uploaded logo */
+  object-fit: contain;
+  /* never distort an uploaded logo */
 }
+
 .co-name {
   font-size: 17pt;
   line-height: 1.05;
   letter-spacing: 0.1pt;
 }
+
 .co-addr {
   font-size: 7.5pt;
   line-height: 1.3;
   margin-top: 1.5pt;
   padding-bottom: 2pt;
 }
+
 .co-meta {
   font-size: 7.5pt;
   margin-top: 1pt;
@@ -92,10 +100,25 @@ html, body {
   font-weight: bold;
   font-size: 8pt;
 }
-.band > div { padding: 0 5pt; }
-.band .band-l { width: 32%; }
-.band .band-c { flex: 1; text-align: center; letter-spacing: 0.3pt; }
-.band .band-r { width: 32%; text-align: right; }
+
+.band>div {
+  padding: 0 5pt;
+}
+
+.band .band-l {
+  width: 32%;
+}
+
+.band .band-c {
+  flex: 1;
+  text-align: center;
+  letter-spacing: 0.3pt;
+}
+
+.band .band-r {
+  width: 32%;
+  text-align: right;
+}
 
 /* --- party (left) + invoice meta (right) --- */
 .party {
@@ -103,6 +126,7 @@ html, body {
   height: 76.6pt;
   border-bottom: 0.8pt solid #000;
 }
+
 .party-l {
   flex: 1;
   border-right: 0.8pt solid #000;
@@ -112,12 +136,20 @@ html, body {
   position: relative;
   overflow: hidden;
 }
-.party-name { font-size: 9pt; }
-.party-name b { font-size: 11pt; }
+
+.party-name {
+  font-size: 9pt;
+}
+
+.party-name b {
+  font-size: 11pt;
+}
+
 .party-addr {
   font-size: 8pt;
   margin-top: 2pt;
 }
+
 /* Sits low in the box, as on the reference bill. */
 .party-pos {
   position: absolute;
@@ -125,21 +157,38 @@ html, body {
   bottom: 8pt;
   font-size: 8.5pt;
 }
+
 .party-r {
   width: 38.2%;
   display: flex;
   flex-direction: column;
 }
+
 .meta-row {
   display: flex;
   height: 14.6pt;
   border-bottom: 0.8pt solid #000;
   background-color: #f2f2f2;
 }
-.meta-k { width: 66pt; padding: 2pt 4pt; font-weight: bold; }
-.meta-v { flex: 1; padding: 2pt 4pt; font-weight: bold; }
+
+.meta-k {
+  width: 66pt;
+  padding: 2pt 4pt;
+  font-weight: bold;
+}
+
+.meta-v {
+  flex: 1;
+  padding: 2pt 4pt;
+  font-weight: bold;
+}
+
 /* Blank box under the invoice number / date rows. */
-.meta-fill { flex: 1; border-bottom: 0; background-color: transparent; }
+.meta-fill {
+  flex: 1;
+  border-bottom: 0;
+  background-color: transparent;
+}
 
 /* --- line items --- */
 .items {
@@ -147,6 +196,7 @@ html, body {
   border-collapse: collapse;
   table-layout: fixed;
 }
+
 .items th,
 .items td {
   border: 0.8pt solid #000;
@@ -154,14 +204,17 @@ html, body {
   font-size: 8.5pt;
   vertical-align: top;
 }
+
 .items th:first-child,
 .items td:first-child {
   border-left: 0;
 }
+
 .items th:last-child,
 .items td:last-child {
   border-right: 0;
 }
+
 .items thead th {
   font-weight: bold;
   text-align: center;
@@ -169,11 +222,25 @@ html, body {
   line-height: 1.1;
   padding: 1pt 2pt;
 }
-.items thead tr.h1 th { height: 14.2pt; border-top: 0; }
-.items thead tr.h2 th { height: 13.5pt; }
+
+.items thead tr.h1 th {
+  height: 14.2pt;
+  border-top: 0;
+}
+
+.items thead tr.h2 th {
+  height: 13.5pt;
+}
+
 /* Repeat the header if a long bill spills onto a second page. */
-.items thead { display: table-header-group; }
-.items tbody tr { page-break-inside: avoid; }
+.items thead {
+  display: table-header-group;
+}
+
+.items tbody tr {
+  page-break-inside: avoid;
+}
+
 /* The reference bill draws no rules *between* item rows — the item area reads
    as one open box crossed only by the vertical column rules. */
 .items tbody td {
@@ -184,10 +251,22 @@ html, body {
   vertical-align: middle;
 }
 
-.items td.c { text-align: center; }
-.items td.r { text-align: right; }
-.items td.years { text-align: center; color: #1a7a3c; }
-.items td.name { word-wrap: break-word; }
+.items td.c {
+  text-align: center;
+}
+
+.items td.r {
+  text-align: right;
+}
+
+.items td.years {
+  text-align: center;
+  color: #1a7a3c;
+}
+
+.items td.name {
+  word-wrap: break-word;
+}
 
 /* Blank filler that pads the item area out to the reference height. Its height
    is set inline on the row by the renderer, since it depends on the number of
@@ -206,45 +285,65 @@ html, body {
   border-top: 0.8pt solid #000;
   background-color: #f2f2f2;
 }
-.gstin-cell { text-align: left; }
-.total-label { text-align: center; }
+
+.gstin-cell {
+  text-align: left;
+}
+
+.total-label {
+  text-align: center;
+}
 
 /* --- bank / QR / grand total --- */
 .foot {
   display: flex;
   border-top: 0.8pt solid #000;
 }
+
 .foot-bank {
   width: 46%;
   border-right: 0.8pt solid #000;
 }
+
 .bank-tbl {
   width: 100%;
   border-collapse: collapse;
 }
+
 .bank-tbl td {
   height: 11.5pt;
   padding: 0 4pt;
   font-size: 8pt;
   border: 0;
 }
-.bank-tbl td.k { width: 74pt; font-weight: bold; }
-.bank-tbl td.sep { width: 7pt; }
+
+.bank-tbl td.k {
+  width: 74pt;
+  font-weight: bold;
+}
+
+.bank-tbl td.sep {
+  width: 7pt;
+}
+
 .bank-tbl tr.gpay td {
   height: 12.8pt;
   border-top: 0.8pt solid #000;
   color: #c00000;
   font-weight: bold;
 }
+
 .words {
-  height: 18.8pt;
+  min-height: 18.8pt;
   border-top: 0.8pt solid #000;
   padding: 4pt;
   font-size: 8.5pt;
-  overflow: hidden;
 }
+
 /* The amount in words is italic on the reference bill. */
-.words .words-text { font-style: italic; }
+.words .words-text {
+  font-style: italic;
+}
 
 .foot-qr {
   width: 26%;
@@ -252,11 +351,13 @@ html, body {
   padding: 2pt;
   text-align: center;
 }
+
 .foot-qr img {
   max-width: 100%;
   max-height: 56pt;
   object-fit: contain;
 }
+
 .upi-id {
   font-size: 6.5pt;
   margin-top: 1pt;
@@ -268,9 +369,15 @@ html, body {
   display: flex;
   flex-direction: column;
 }
-.foot-total .spacer { flex: 1; }
+
+.foot-total .spacer {
+  height: 47.3pt;
+  flex: none;
+}
+
 .grand {
-  height: 18.8pt;
+  flex: 1;
+  min-height: 18.8pt;
   border-top: 0.8pt solid #000;
   padding: 0 6pt;
   display: flex;
@@ -287,12 +394,14 @@ html, body {
   height: 45.7pt;
   border-top: 0.8pt solid #000;
 }
+
 .note-l {
   flex: 1;
   padding: 3pt 5pt;
   font-size: 8pt;
   overflow: hidden;
 }
+
 .note-r {
   width: 40%;
   padding: 3pt 5pt;
@@ -302,6 +411,7 @@ html, body {
   align-items: flex-end;
   font-size: 8pt;
 }
+
 .sign-imgs {
   flex: 1;
   display: flex;
@@ -310,9 +420,25 @@ html, body {
   gap: 5pt;
   min-height: 0;
 }
+
 .sign-imgs img {
   max-height: 26pt;
   max-width: 70pt;
   object-fit: contain;
 }
-.sign-label { font-size: 7.5pt; }
+
+.sign-label {
+  font-size: 7.5pt;
+}
+
+/* 
+@media print {
+  @page {
+    margin: 10mm;
+    size: A4;
+  }
+
+  body {
+    margin: 0;
+  }
+} */

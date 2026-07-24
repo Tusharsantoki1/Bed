@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import base64
 import binascii
+import io
+import urllib.parse
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
@@ -26,7 +28,7 @@ TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 # Measured off the reference bill: the item area is 115.4pt tall and each line
 # occupies 13.5pt. Short bills are padded with a filler row so the bank block
 # always lands in the same place.
-ITEMS_AREA_PT = 115.4
+ITEMS_AREA_PT = 110.0
 ITEM_ROW_PT = 13.5
 # The product column is 31.8% of a 537.7pt table; at 7.5pt Times that fits
 # roughly 48 characters per line. Used to predict wrapping so the filler can
@@ -142,6 +144,35 @@ def _sniff_mime(raw: bytes) -> str:
     return "image/png"
 
 
+def _generate_upi_qr(upi_id: str, payee_name: str, amount: Decimal) -> Optional[str]:
+    """Generate a dynamic Google Pay / UPI QR code with the specific invoice amount."""
+    if not upi_id:
+        return None
+        
+    try:
+        import qrcode
+    except ImportError:
+        return None
+
+    safe_name = urllib.parse.quote(payee_name or "")
+    url = f"upi://pay?pa={upi_id}&pn={safe_name}&am={amount}&cu=INR"
+    
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+    return f"data:image/png;base64,{b64}"
+
+
 def _build_context(invoice: Invoice, company: Company) -> dict:
     party = invoice.party
     has_gst = invoice.gst_type != GstType.none
@@ -193,6 +224,9 @@ def _build_context(invoice: Invoice, company: Company) -> dict:
         ] if p
     ]
 
+    upi_id = getattr(company, "upi_id", None) or company.upi_number or None
+    dynamic_qr = _generate_upi_qr(upi_id, company.name, invoice.grand_total) if upi_id else None
+
     return {
         "company": company,
         "party": party,
@@ -214,11 +248,11 @@ def _build_context(invoice: Invoice, company: Company) -> dict:
             "grand": _grand(invoice.grand_total),
         },
         "logo": _data_uri(company.logo_base64),
-        "qr": _data_uri(company.payment_qr_base64),
+        "qr": dynamic_qr or _data_uri(company.payment_qr_base64),
         "signature": _data_uri(company.signature_base64),
         "stamp": _data_uri(company.stamp_base64),
         # The VPA shown under the QR; falls back to the G-Pay number if unset.
-        "upi_id": getattr(company, "upi_id", None) or company.upi_number or None,
+        "upi_id": upi_id,
     }
 
 
